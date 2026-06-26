@@ -31,24 +31,21 @@
         <section id="inicial">
             <div class="inicial-menu" id="inicial-menu">
                 <h1>Bem-vindo 👋</h1>
-
-                <div class="info-boxes"
-                    style="display: flex; gap: 1.25rem; flex-wrap: wrap; justify-content: center; width: 100%;"></div>
-                <div class="info-box">
-                    <span>📅 Data completa:</span>
-                    <strong id="dataAtual">--</strong>
-                </div>
-
-                <div class="info-box">
-                    <span>🕒 Horário atual:</span>
-                    <strong id="horaAtual">--:--:--</strong>
+                <div class="info-boxes">
+                    <div class="info-box">
+                        <span>📅 Data de hoje</span>
+                        <strong id="dataAtual">--</strong>
+                    </div>
+                    <div class="info-box">
+                        <span>🕒 Horário atual</span>
+                        <strong id="horaAtual">--:--:--</strong>
+                    </div>
                 </div>
             </div>
-
             <div id="inicialConteudo"></div>
         </section>
 
-        <section id="clientes">
+        <section id="clientes" hidden>
             <div class="clientes-menu" id="clientes-menu">
                 <button id="btnPesquisarCliente">PESQUISAR CLIENTES</button>
                 <button id="btnCadastrarCadastrar">CADASTRAR CLIENTES</button>
@@ -56,11 +53,11 @@
             <div id="clientesConteudo"></div>
         </section>
 
-        <section id="notas">
+        <section id="notas" hidden>
             <button></button>
         </section>
 
-        <section id="lixeira">
+        <section id="lixeira" hidden>
             <button></button>
         </section>
     </main>

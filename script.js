@@ -73,10 +73,6 @@ function renderClientes(clientes) {
     toolbar.classList.add("clientes-toolbar");
 
     toolbar.innerHTML = `
-    <div class="clientes-menu" id="clientes-menu">
-                <button id="btnPesquisarCliente">PESQUISAR CLIENTES</button>
-                <button id="btnCadastrarCadastrar">CADASTRAR CLIENTES</button>
-            </div>
         <select id="ordenarClientes">
             <option value="">Ordenar</option>
             <option value="nome">Nome (A-Z)</option>
