@@ -307,60 +307,80 @@ section:not([hidden]) {
 
 /* MODAL CADASTRO */
 /* Overlay */
+#modal-containerNota,
 #modal-container {
     display: none;
     position: fixed;
-
     top: 0;
     left: 260px;
-    /* largura da navbar */
     right: 0;
     bottom: 0;
-
-    background: rgba(0, 0, 0, .45);
-    backdrop-filter: blur(3px);
-
+    background: rgba(0, 0, 0, 0.6);
+    backdrop-filter: blur(5px);
     justify-content: center;
     align-items: center;
-
     z-index: 999;
+    animation: fadeIn 0.3s ease;
+}
+
+@keyframes fadeIn {
+    from {
+        background: rgba(0, 0, 0, 0);
+        backdrop-filter: blur(0px);
+    }
+
+    to {
+        background: rgba(0, 0, 0, 0.6);
+        backdrop-filter: blur(5px);
+    }
 }
 
 /* Caixa do modal */
 .modal-card {
-    width: min(430px, 90%);
-
+    width: min(500px, 95%);
     height: auto;
     max-height: 90vh;
-
-    background: #1f2937;
-    border-radius: 14px;
-
-    padding: 28px;
-
-    box-shadow: 0 20px 50px rgba(0, 0, 0, .45);
-
+    background: linear-gradient(135deg, #1f2937 0%, #111827 100%);
+    border-radius: 16px;
+    padding: 32px;
+    box-shadow: 0 25px 60px rgba(0, 0, 0, 0.6), 0 0 1px rgba(59, 130, 246, 0.3);
+    border: 1px solid rgba(59, 130, 246, 0.1);
     overflow-y: auto;
-
     position: relative;
+    animation: slideUp 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes slideUp {
+    from {
+        opacity: 0;
+        transform: translateY(20px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
 }
 
 /* Título */
 .modal-card h2 {
     color: #fff;
-    margin-bottom: 25px;
-    font-size: 26px;
+    margin-bottom: 30px;
+    font-size: 28px;
+    font-weight: 700;
+    letter-spacing: -0.5px;
 }
 
 .modal-card h2 span {
     color: #60a5fa;
+    font-weight: 800;
 }
 
 /* Grid */
 .grid {
     display: grid;
-    gap: 16px;
-    margin-bottom: 18px;
+    gap: 18px;
+    margin-bottom: 20px;
 }
 
 .grid-two {
@@ -375,8 +395,10 @@ section:not([hidden]) {
 .modal-card label,
 .modal-card legend {
     color: #d1d5db;
-    font-size: 14px;
+    font-size: 13px;
     font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
 }
 
 /* Campos */
@@ -384,32 +406,43 @@ section:not([hidden]) {
 .modal-card textarea,
 .modal-card select {
     width: 100%;
-
-    margin-top: 6px;
-
-    padding: 11px 12px;
-
-    border: 1px solid #374151;
-    border-radius: 8px;
-
-    background: #111827;
-    color: white;
-
+    margin-top: 8px;
+    padding: 12px 14px;
+    border: 1.5px solid #374151;
+    border-radius: 10px;
+    background: #0f172a;
+    color: #e5e7eb;
+    font-size: 14px;
     outline: none;
+    transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+}
 
-    transition: .2s;
+.modal-card input::placeholder,
+.modal-card textarea::placeholder,
+.modal-card select::placeholder {
+    color: #6b7280;
+}
+
+.modal-card input:hover,
+.modal-card textarea:hover,
+.modal-card select:hover {
+    border-color: #4b5563;
+    background: #111827;
 }
 
 .modal-card input:focus,
 .modal-card textarea:focus,
 .modal-card select:focus {
     border-color: #3b82f6;
+    background: #0f172a;
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1), inset 0 0 0 1px rgba(59, 130, 246, 0.2);
 }
 
 /* Textarea */
 .modal-card textarea {
     min-height: 120px;
     resize: vertical;
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
 }
 
 /* Radio */
@@ -444,69 +477,333 @@ section:not([hidden]) {
 
 /* Botão */
 .button {
-    background: #2563eb;
+    background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
     color: white;
-
     border: none;
-    border-radius: 8px;
-
-    padding: 12px 22px;
-
+    border-radius: 10px;
+    padding: 13px 28px;
     cursor: pointer;
-
-    font-weight: bold;
-
-    transition: .2s;
+    font-weight: 700;
+    font-size: 14px;
+    letter-spacing: 0.3px;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    box-shadow: 0 4px 15px rgba(59, 130, 246, 0.3);
+    width: 100%;
+    margin-top: 24px;
 }
 
 .button:hover {
-    background: #1d4ed8;
+    background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
+    box-shadow: 0 6px 20px rgba(59, 130, 246, 0.4);
+    transform: translateY(-2px);
+}
+
+.button:active {
+    transform: translateY(0px);
 }
 
 /* Fechar */
 .close-button {
     position: absolute;
-
-    top: 16px;
-    right: 16px;
-
-    width: 36px;
-    height: 36px;
-
+    top: 18px;
+    right: 18px;
+    width: 40px;
+    height: 40px;
     border: none;
     border-radius: 50%;
-
-    background: transparent;
-    color: #9ca3af;
-
+    background: rgba(55, 65, 81, 0.5);
+    color: #d1d5db;
     font-size: 28px;
     cursor: pointer;
-
-    transition: .2s;
+    transition: all 0.25s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
 }
 
 .close-button:hover {
-    background: #374151;
+    background: rgba(79, 90, 102, 0.8);
     color: white;
+    transform: rotate(90deg);
+}
+
+.modal-card-nota {
+    width: min(95vw, 100%);
+    height: auto;
+    max-height: 90vh;
+    background: linear-gradient(135deg, #1f2937 0%, #111827 100%);
+    border-radius: 16px;
+    padding: 24px;
+    box-shadow: 0 25px 60px rgba(0, 0, 0, 0.6), 0 0 1px rgba(59, 130, 246, 0.3);
+    overflow-y: auto;
+    position: relative;
+    border: 1px solid rgba(59, 130, 246, 0.1);
+    animation: slideUp 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.modal-card-nota h2 {
+    color: #f9fafb;
+    font-size: 24px;
+    margin-bottom: 28px;
+    letter-spacing: -0.5px;
+    font-weight: 700;
+}
+
+.modal-card-nota label,
+.modal-card-nota legend {
+    color: #e5e7eb;
+    font-size: 15px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    display: block;
+    margin-bottom: 8px;
+}
+
+.modal-card-nota input,
+.modal-card-nota textarea,
+.modal-card-nota select {
+    width: 100%;
+    margin-bottom: 18px;
+    padding: 14px 16px;
+    border: 1.5px solid #374151;
+    border-radius: 10px;
+    background: #0f172a;
+    color: #e5e7eb;
+    font-size: 16px;
+    outline: none;
+    transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+    font-family: inherit;
+}
+
+.modal-card-nota input::placeholder,
+.modal-card-nota textarea::placeholder {
+    color: #6b7280;
+}
+
+.modal-card-nota input:hover,
+.modal-card-nota textarea:hover,
+.modal-card-nota select:hover {
+    border-color: #4b5563;
+    background: #111827;
+}
+
+.modal-card-nota input:focus,
+.modal-card-nota textarea:focus,
+.modal-card-nota select:focus {
+    border-color: #3b82f6;
+    background: #0f172a;
+    box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15), inset 0 0 0 1px rgba(59, 130, 246, 0.2);
+}
+
+.modal-card-nota textarea {
+    min-height: 140px;
+    resize: vertical;
+    line-height: 1.5;
+    margin-bottom: 18px;
+}
+
+/* Estilo customizado para file input */
+.modal-card-nota input[type="file"] {
+    padding: 12px;
+    cursor: pointer;
+    background: linear-gradient(135deg, #1e3a8a 0%, #172554 100%);
+    border: 2px dashed #3b82f6;
+    color: #60a5fa;
+}
+
+.modal-card-nota input[type="file"]::file-selector-button {
+    background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+    color: white;
+    border: none;
+    padding: 10px 20px;
+    border-radius: 8px;
+    cursor: pointer;
+    font-weight: 700;
+    font-size: 14px;
+    transition: all 0.2s ease;
+    margin-right: 12px;
+}
+
+.modal-card-nota input[type="file"]::file-selector-button:hover {
+    background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
+    box-shadow: 0 4px 12px rgba(59, 130, 246, 0.4);
+}
+
+.modal-card-nota .button {
+    width: 100%;
+    background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+    color: white;
+    border: none;
+    border-radius: 10px;
+    padding: 16px 28px;
+    cursor: pointer;
+    font-weight: 700;
+    font-size: 16px;
+    letter-spacing: 0.3px;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    box-shadow: 0 4px 15px rgba(59, 130, 246, 0.3);
+    margin-top: 8px;
+    margin-bottom: 12px;
+}
+
+.modal-card-nota .button:hover {
+    background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
+    box-shadow: 0 6px 20px rgba(59, 130, 246, 0.4);
+    transform: translateY(-2px);
+}
+
+.modal-card-nota .button:active {
+    transform: translateY(0);
+}
+
+.modal-card-nota .close-button {
+    background: rgba(55, 65, 81, 0.5);
+    color: #d1d5db;
+}
+
+.modal-card-nota .close-button:hover {
+    background: rgba(79, 90, 102, 0.8);
+    color: white;
+    transform: rotate(90deg);
+}
+
+/* Checkbox Customizado */
+.modal-card-nota input[type="checkbox"],
+.modal-card input[type="checkbox"] {
+    accent-color: #3b82f6;
+    width: 20px;
+    height: 20px;
+    cursor: pointer;
+    margin-right: 10px;
+    margin-bottom: 0;
+}
+
+.modal-card-nota label input[type="checkbox"],
+.modal-card label input[type="checkbox"] {
+    margin-bottom: 0;
+    margin-top: 0;
+    padding: 0;
+}
+
+.modal-card-nota label:has(input[type="checkbox"]),
+.modal-card label:has(input[type="checkbox"]) {
+    display: flex;
+    align-items: center;
+    color: #e5e7eb;
+    font-size: 15px;
+    font-weight: 500;
+    text-transform: none;
+    letter-spacing: normal;
+    margin-bottom: 16px;
+    cursor: pointer;
+}
+
+/* Autocomplete */
+.autocomplete {
+    position: relative;
+    width: 100%;
+}
+
+.autocomplete-list {
+    position: absolute;
+    top: calc(100% - 1.5px);
+    left: 0;
+    right: 0;
+    background: #0f172a;
+    border: 1.5px solid #374151;
+    border-top: 1.5px solid #374151;
+    border-radius: 0 0 10px 10px;
+    max-height: 250px;
+    overflow-y: auto;
+    z-index: 100;
+    display: none;
+}
+
+.autocomplete-list.active {
+    display: block;
+}
+
+.autocomplete-item {
+    padding: 12px 16px;
+    cursor: pointer;
+    color: #e5e7eb;
+    font-size: 14px;
+    transition: all 0.2s ease;
+    border-bottom: 1px solid #1f2937;
+}
+
+.autocomplete-item:hover,
+.autocomplete-item.selected {
+    background: #1e3a8a;
+    color: #60a5fa;
+    padding-left: 20px;
+}
+
+.autocomplete-item:last-child {
+    border-bottom: none;
+}
+
+.grid>label+.autocomplete {
+    margin-top: -18px;
 }
 
 @media (max-width: 768px) {
 
+    #modal-containerNota,
     #modal-container {
         left: 0;
     }
 
-    .grid-two {
+    .modal-card,
+    .modal-card-nota {
+        width: 95vw;
+        padding: 20px;
+        max-height: 85vh;
+    }
+
+    .modal-card h2,
+    .modal-card-nota h2 {
+        font-size: 22px;
+        margin-bottom: 24px;
+    }
+
+    .modal-card label,
+    .modal-card legend,
+    .modal-card-nota label,
+    .modal-card-nota legend {
+        font-size: 14px;
+        margin-bottom: 8px;
+    }
+
+    .modal-card input,
+    .modal-card textarea,
+    .modal-card select,
+    .modal-card-nota input,
+    .modal-card-nota textarea,
+    .modal-card-nota select {
+        font-size: 16px;
+        padding: 14px 12px;
+        margin-bottom: 16px;
+    }
+
+    .grid-two,
+    .grid-three-fourths {
         grid-template-columns: 1fr;
+    }
+
+    .button,
+    .modal-card .button,
+    .modal-card-nota .button {
+        width: 100%;
+        padding: 15px 24px;
+        font-size: 16px;
+        margin-bottom: 12px;
     }
 
     .footer {
         flex-direction: column;
         gap: 15px;
         align-items: stretch;
-    }
-
-    .button {
-        width: 100%;
     }
 }

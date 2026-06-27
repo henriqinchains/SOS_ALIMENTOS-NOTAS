@@ -8,9 +8,25 @@ const btnPesquisarCliente = document.getElementById("btnPesquisarCliente");
 
 const btnAbrirModal = document.getElementById("btnAbrirModalCliente");
 const modalContainer = document.getElementById("modal-container");
+
 const formNovoCliente = document.getElementById("formNovoCliente");
 const btnSubmitCliente = document.getElementById("btnSubmitCliente");
+const btnSubmitNota = document.getElementById("btnSubmitNota")
 const btnFecharModal = document.getElementById("btn-fechar-modal");
+
+const btnAbrirModalNota = document.getElementById("btnNovaNota");
+const modalContainerNota = document.getElementById("modal-containerNota");
+const btnFecharModalNota = document.getElementById("btn-fechar-modal-nota");
+
+const formNota = document.getElementById("formNota");
+
+const inputClienteNota = document.getElementById("clienteNota");
+const inputIdCliente = document.getElementById("idCliente");
+const inputEmailNota = document.getElementById("email");
+const inputNumeroNota = document.getElementById("numeroNota");
+const inputDataEmissao = document.getElementById("dataEmissao");
+
+const listaClientes = document.getElementById("listaClientes");
 
 let todosClientes = [];
 
@@ -25,6 +41,28 @@ async function gerarID() {
 }
 
 document.addEventListener("DOMContentLoaded", () => {
+
+
+    if (btnAbrirModalNota) {
+        btnAbrirModalNota.addEventListener("click", () => {
+
+            modalContainerNota.style.display = "flex";
+            document.body.style.overflow = "hidden";
+
+            formNota.reset();
+
+            inputIdCliente.value = "";
+            inputNumeroNota.value = "";
+            inputEmailNota.value = "";
+
+            inputDataEmissao.value = new Date().toISOString().split("T")[0];
+
+            preencherListaClientes();
+
+            inputClienteNota.focus();
+
+        });
+    }
 
     atualizarRelogio();
     setInterval(atualizarRelogio, 1000);
@@ -73,9 +111,27 @@ document.addEventListener("DOMContentLoaded", () => {
         btnFecharModal.addEventListener("click", fecharModal);
     }
 
+
+    // Fechar modal nota
+    function fecharModalNota() {
+
+        modalContainerNota.style.display = "none";
+
+        document.body.style.overflow = "";
+
+        formNota.reset();
+
+        inputIdCliente.value = "";
+        inputNumeroNota.value = "";
+
+    }
+
+    btnFecharModalNota.addEventListener("click", fecharModalNota);
+
     window.addEventListener("mousedown", (e) => {
         if (e.target === modalContainer) {
             fecharModal();
+            fecharModalNota();
         }
     });
 
@@ -121,6 +177,56 @@ document.addEventListener("DOMContentLoaded", () => {
         });
     }
 
+    if (formNota) {
+        formNota.addEventListener("submit", async (e) => {
+            e.preventDefault();
+
+            const btnSubmitNota = document.getElementById("btnSubmitNota");
+
+            btnSubmitNota.disabled = true;
+            btnSubmitNota.innerText = "Enviando...";
+
+            try {
+
+                const formData = new FormData(formNota);
+                const dados = Object.fromEntries(formData);
+
+                const payload = {
+                    cliente: dados.cliente,
+                    email: dados.email || null,
+                    valor: dados.valor
+                };
+
+                const resposta = await fetch("https://sos-alimentos-servidor.onrender.com/api/notas", {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json"
+                    },
+                    body: JSON.stringify(payload)
+                });
+
+                const respostaData = await resposta.json();
+
+                if (resposta.ok) {
+                    alert("Nota registrada com sucesso!");
+                    formNota.reset();
+                    document.getElementById("modal-containerNota").style.display = "none";
+                } else {
+                    alert(respostaData.error || "Erro ao cadastrar nota.");
+                }
+
+            } catch (erro) {
+                console.error(erro);
+                alert("Erro ao conectar ao servidor.");
+            }
+
+            btnSubmitNota.disabled = false;
+            btnSubmitNota.innerText = "Registrar Nota";
+        });
+    }
+
+
+    //carregar clientes pra exibiccao
     async function carregarClientes() {
 
         try {
@@ -143,6 +249,142 @@ document.addEventListener("DOMContentLoaded", () => {
 
     }
 
+    //autocompletando cliente
+
+    inputClienteNota.addEventListener("input", () => {
+        if (inputClienteNota.value.trim()) {
+            preencherListaClientes();
+        } else {
+            listaClientes.classList.remove("active");
+            listaClientes.innerHTML = "";
+        }
+    });
+
+    inputClienteNota.addEventListener("change", buscarClienteSelecionado);
+
+    async function buscarClienteSelecionado() {
+
+        const nomeCliente = inputClienteNota.value.trim();
+
+        if (!nomeCliente) return;
+
+        const cliente = todosClientes.find(c =>
+            c.cliente.toLowerCase() === nomeCliente.toLowerCase()
+        );
+
+        if (!cliente) {
+
+            inputIdCliente.value = "";
+            inputEmailNota.value = "";
+            inputNumeroNota.value = 1;
+            inputEmailNota.removeAttribute("readonly");
+
+            return;
+
+        }
+        else {
+            inputEmailNota.value = cliente.email || "";
+            inputEmailNota.setAttribute("readonly", true);
+        }
+
+        inputIdCliente.value = cliente.id;
+        inputEmailNota.value = cliente.email || "";
+        inputEmailNota.setAttribute("readonly", true);
+
+        await buscarNumeroNota(cliente.id);
+
+    }
+
+    function mostrarSugestoes(texto) {
+
+        listaClientes.innerHTML = "";
+
+        if (texto.length === 0) {
+
+            listaClientes.style.display = "none";
+
+            return;
+
+        }
+
+        const encontrados = todosClientes.filter(cliente =>
+
+            cliente.cliente
+                .toLowerCase()
+                .includes(texto.toLowerCase())
+
+        );
+
+        if (encontrados.length === 0) {
+
+            listaClientes.style.display = "none";
+
+            return;
+
+        }
+
+        encontrados.forEach(cliente => {
+
+            const item = document.createElement("div");
+
+            item.className = "autocomplete-item";
+
+            item.textContent = cliente.cliente;
+
+            item.addEventListener("click", () => {
+
+                inputClienteNota.value = cliente.cliente;
+
+                listaClientes.style.display = "none";
+
+                buscarClienteSelecionado();
+
+            });
+
+            listaClientes.appendChild(item);
+
+        });
+
+        listaClientes.style.display = "block";
+
+    }
+
+    inputClienteNota.addEventListener("input", (e) => {
+
+        mostrarSugestoes(e.target.value);
+
+    });
+
+    // Fechar lista de autocomplete quando clicar fora
+    document.addEventListener("click", (e) => {
+        if (!e.target.closest(".autocomplete")) {
+            listaClientes.classList.remove("active");
+        }
+    });
+
+    async function buscarNumeroNota(idCliente) {
+
+        try {
+
+            const resposta = await fetch("https://sos-alimentos-servidor.onrender.com/api/notas");
+
+            const notas = await resposta.json();
+
+            const notasCliente = notas.filter(n => n.idCliente === idCliente);
+
+            inputNumeroNota.value = notasCliente.length + 1;
+
+        } catch (erro) {
+
+            console.error(erro);
+
+            inputNumeroNota.value = 1;
+
+        }
+
+    }
+
+    //exibicao dos clientes
     btnPesquisarCliente.addEventListener("click", carregarClientes);
 
     function renderClientes(clientes) {
@@ -259,6 +501,10 @@ document.addEventListener("DOMContentLoaded", () => {
         });
 
     }
+
+
+
+
 
     // Relógio da página inicial
     function atualizarRelogio() {
