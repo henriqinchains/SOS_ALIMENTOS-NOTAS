@@ -457,9 +457,17 @@ document.addEventListener("DOMContentLoaded", () => {
                 const cardLinkCliente = document.createElement("div");
                 cardLinkCliente.classList.add("cliente-nota-gatilho");
                 cardLinkCliente.innerHTML = `
-                    <div class="indicador-info">
-                        <strong>${cliente.cliente}</strong>
-                        <span>ID: ${cliente.id}</span>
+                    <div class="cliente-nota-card-content">
+                        <div class="indicador-info">
+                            <strong>${cliente.cliente}</strong>
+                            <span>ID: ${cliente.id}</span>
+                        </div>
+                        <div class="cliente-info-grid">
+                            <span>${cliente.rua ? `${cliente.rua}` : 'Rua não cadastrada'}</span>
+                            <span>${cliente.email ? `${cliente.email}` : 'E-mail não informado'}</span>
+                            <span>${cliente.bairro ? cliente.bairro : 'Bairro não cadastrado'}</span>
+                            <span>${cliente.quantidadeNotas ? cliente.quantidadeNotas : 'Cliente sem notas no momento.'} nota(s)</span>
+                        </div>
                     </div>
                     <span class="seta-status">▼</span>
                 `;
@@ -477,7 +485,6 @@ document.addEventListener("DOMContentLoaded", () => {
                         cardLinkCliente.classList.add("aberto");
 
                         containerNotasCliente.innerHTML = "<p class='loading-txt'>Buscando notas...</p>";
-                        // CORREÇÃO: Agora passamos o objeto 'cliente' inteiro, não apenas o ID
                         await carregarNotasDoCliente(cliente, containerNotasCliente);
                     } else {
                         containerNotasCliente.style.display = "none";
@@ -486,10 +493,14 @@ document.addEventListener("DOMContentLoaded", () => {
                     }
                 });
 
-                secaoLetra.appendChild(cardLinkCliente);
-                secaoLetra.appendChild(containerNotasCliente);
+                const wrapperCliente = document.createElement("div");
+                wrapperCliente.classList.add("cliente-nota-wrapper");
+                wrapperCliente.appendChild(cardLinkCliente);
+                wrapperCliente.appendChild(containerNotasCliente);
+                gridClientesLetra.appendChild(wrapperCliente);
             });
 
+            secaoLetra.appendChild(gridClientesLetra);
             containerGeral.appendChild(secaoLetra);
         }
 

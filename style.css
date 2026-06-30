@@ -667,22 +667,35 @@ section:not([hidden]) {
     padding-bottom: 5px;
 }
 
-.cliente-nota-gatilho {
+.grid-clientes-nota {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+    gap: 18px;
+    width: 100%;
+}
+
+.cliente-nota-wrapper {
     display: flex;
-    justify-content: space-between;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.cliente-nota-gatilho {
+    display: grid;
+    grid-template-columns: 1fr auto;
     align-items: center;
+    gap: 16px;
     background: #111827;
-    padding: 14px 20px;
-    border-radius: 8px;
-    margin-bottom: 8px;
+    padding: 18px 22px;
+    border-radius: 12px;
     cursor: pointer;
     transition: all 0.2s ease;
-    border: 1px solid rgba(255, 255, 255, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.08);
 }
 
 .cliente-nota-gatilho:hover {
     background: #1f2937;
-    transform: translateX(3px);
+    transform: translateY(-1px);
     border-color: #3b82f6;
 }
 
@@ -691,10 +704,24 @@ section:not([hidden]) {
     border-color: #60a5fa;
 }
 
+.cliente-nota-card-content {
+    display: grid;
+    gap: 10px;
+}
+
+.cliente-info-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, max-content));
+    gap: 10px 20px;
+    color: #9ca3af;
+    font-size: 13px;
+    line-height: 1.4;
+}
+
 .indicador-info {
     display: flex;
     flex-direction: column;
-    gap: 4px;
+    gap: 5px;
 }
 
 .indicador-info strong {
