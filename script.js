@@ -511,12 +511,31 @@ document.addEventListener("DOMContentLoaded", () => {
 
     async function carregarNotasDoCliente(clienteAlvo, containerAlvo) {
         try {
+
+            function marcarComoPago(idNota, pago) {
+
+                const mensagem = pago
+                    ? "Esta nota já está paga. Deseja desmarcá-la?"
+                    : "Tem certeza que deseja marcar esta nota como paga?";
+
+                if (!confirm(mensagem)) return;
+
+                fetch(`https://sos-alimentos-servidor.onrender.com/api/notas/${idNota}/pago`, {
+                    method: "PUT"
+                })
+                    .then(r => {
+                        if (!r.ok) throw new Error();
+                        return r.json();
+                    })
+                    .then(() => {
+                        alert("Status atualizado!");
+                        renderAbasNotas();
+                    })
+                    .catch(console.error);
+            }
+
             const resposta = await fetch(`https://sos-alimentos-servidor.onrender.com/api/notas?_=${Date.now()}`);
             const notas = await resposta.json();
-
-            console.log("--- DEBUG DE NOTAS ---");
-            console.log("Buscando notas para:", clienteAlvo.cliente, "| ID:", clienteAlvo._id);
-            console.log("Notas retornadas pelo servidor:", notas);
 
             const notasDoCliente = notas.filter(n => {
 
@@ -593,28 +612,6 @@ document.addEventListener("DOMContentLoaded", () => {
             containerAlvo.innerHTML = "<p class='erro-txt'>Erro ao carregar notas fiscais do servidor.</p>";
         }
 
-    }
-
-    function marcarComoPago(idNota, pago) {
-
-        const mensagem = pago
-            ? "Esta nota já está paga. Deseja desmarcá-la?"
-            : "Tem certeza que deseja marcar esta nota como paga?";
-
-        if (!confirm(mensagem)) return;
-
-        fetch(`https://sos-alimentos-servidor.onrender.com/api/notas/${idNota}/pago`, {
-            method: "PUT"
-        })
-            .then(r => {
-                if (!r.ok) throw new Error();
-                return r.json();
-            })
-            .then(() => {
-                alert("Status atualizado!");
-                renderAbasNotas();
-            })
-            .catch(console.error);
     }
 
 
