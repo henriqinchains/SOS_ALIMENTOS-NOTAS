@@ -561,13 +561,13 @@ document.addEventListener("DOMContentLoaded", () => {
                     <div class="nota-image">
                         <img src="${nota.img}" alt="Foto da nota" onclick="window.open('${nota.img}', '_blank')">
                     </div>
-                    <button class="btn-marcar-pago">Marcar como Pago</button>
+                    <button class="btn-marcar-pago" onclick="marcarComoPago('${nota._id}', ${nota.pago})">${nota.pago ? "Desmarcar como Pago" : "Marcar como Pago"}</button>
                 `;
 
                 const btnPago = cardNotaItem.querySelector(".btn-marcar-pago");
                 btnPago.addEventListener("click", (e) => {
                     e.stopPropagation();
-                    marcarComoPago(nota);
+                    marcarComoPago(nota._id, nota.pago);
                 });
 
                 cardNotaItem.addEventListener("click", () => {
@@ -597,33 +597,34 @@ document.addEventListener("DOMContentLoaded", () => {
         containerAlvo.appendChild(cardNotaItem);
     }
 
-    function marcarComoPago(nota) {
+    function marcarComoPago(idNota, pago) {
 
-        if (nota.pago) {
-            alert("Esta nota já está paga.");
-            return;
+        if (pago) {
+            if (!confirm("Esta nota já está marcada como PAGA. Deseja desmarcá-la?")) {
+                return;
+            }
+        } else {
+            if (!confirm("Tem certeza que deseja marcar esta nota como PAGA?")) {
+                return;
+            }
         }
 
-        if (!confirm("Tem certeza que deseja marcar esta nota como PAGA?")) {
-            return;
-        }
-
-        fetch(`https://sos-alimentos-servidor.onrender.com/api/notas/${nota._id}/pago`, {
+        fetch(`https://sos-alimentos-servidor.onrender.com/api/notas/${idNota}/pago`, {
             method: "PATCH"
         })
             .then(response => {
                 if (!response.ok) {
-                    throw new Error("Erro ao marcar nota como paga");
+                    throw new Error("Erro ao atualizar nota");
                 }
                 return response.json();
             })
             .then(() => {
-                alert("Nota marcada como paga com sucesso!");
+                alert(pago ? "Nota desmarcada como paga!" : "Nota marcada como paga!");
                 location.reload();
             })
             .catch(err => {
                 console.error(err);
-                alert("Erro ao marcar nota como paga.");
+                alert("Erro ao atualizar nota.");
             });
     }
 
