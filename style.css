@@ -644,7 +644,7 @@ section:not([hidden]) {
     padding-left: 20px;
 }
 
-/* ───── SEÇÃO ALFABÉTICA DE NOTAS (CORRIGIDO FORA DA MEDIA QUERY) ───── */
+/* ───── SEÇÃO ALFABÉTICA DE NOTAS ───── */
 #notas {
     padding: 20px;
     width: 100%;
@@ -750,7 +750,7 @@ section:not([hidden]) {
 
 .sub-container-notas-listagem {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+    grid-template-columns: repeat(auto-fill, minmax(180px, 220px));
     gap: 15px;
     padding: 10px;
     margin-top: 5px;
@@ -799,11 +799,16 @@ section:not([hidden]) {
 }
 
 .nota-fiscal-card-ajuste {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
     box-shadow: 0 4px 6px rgba(0, 0, 0, 0.3);
     padding: 12px;
     gap: 2px;
     border-radius: 12px;
-    max-width: 250px;
+    width: 100%;
+    overflow: hidden;
+    box-sizing: border-box;
 }
 
 .nota-fiscal-card-ajuste h3 {
@@ -825,24 +830,78 @@ section:not([hidden]) {
 }
 
 .nota-image {
-    width: 160px;
-    margin: 12px auto 0;
+    width: 100%;
+    height: 140px;
+    margin: 12px 0 0;
     border-radius: 8px;
     overflow: hidden;
     display: flex;
     justify-content: center;
     align-items: center;
-    background: #0f172a;
-    padding: 10px;
+    box-sizing: border-box;
+    flex-shrink: 0;
 }
 
 .nota-image img {
-    width: 160px;
-    max-width: 160px;
-    max-height: 160px;
-    object-fit: contain;
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
     display: block;
 }
+
+
+
+.btn-marcar-pago {
+    width: 100%;
+    margin-top: auto;
+    padding: 8px 12px;
+    border: none;
+    border-radius: 8px;
+    background: #374151;
+    color: #f9fafb;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: 0.2s;
+}
+
+.btn-marcar-pago:hover {
+    background: #4b5563;
+}
+
+/* Destaque visual quando a nota já está paga */
+.nota-paga .btn-marcar-pago {
+    background: #10b981;
+    color: white;
+}
+
+.nota-paga .btn-marcar-pago:hover {
+    background: #059669;
+}
+
+.nota-paga {
+    background-color: #16a34a;
+    border-color: #15803d;
+}
+
+.loading-txt,
+.sem-notas-txt,
+.erro-txt {
+    grid-column: 1 / -1;
+    color: #9ca3af;
+    font-size: 14px;
+    font-style: italic;
+    padding: 15px;
+    text-align: center;
+}
+
+.erro-txt {
+    color: #ef4444;
+}
+
+/* ═══════════════════════════════════════ */
+/* ───── MEDIA QUERIES (um bloco por breakpoint, sem duplicação) ───── */
+/* ═══════════════════════════════════════ */
 
 @media (max-width: 900px) {
     body {
@@ -879,9 +938,12 @@ section:not([hidden]) {
         min-width: 0;
     }
 
-    #clientesConteudo,
-    .sub-container-notas-listagem {
+    #clientesConteudo {
         grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+    }
+
+    .sub-container-notas-listagem {
+        grid-template-columns: repeat(auto-fill, minmax(160px, 200px));
     }
 
     .clientes-toolbar {
@@ -894,7 +956,7 @@ section:not([hidden]) {
     }
 
     .grid-clientes-nota {
-        grid-template-columns: 1fr;
+        grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
     }
 
     .cliente-info-grid {
@@ -909,6 +971,11 @@ section:not([hidden]) {
     .modal-card-nota {
         width: min(96vw, 100%);
         padding: 20px;
+    }
+
+    .nota-paga {
+        background-color: #16a34a;
+        border-color: #15803d;
     }
 }
 
@@ -927,11 +994,11 @@ section:not([hidden]) {
     }
 
     .grid-clientes-nota {
-        grid-template-columns: 1fr;
+        grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
     }
 
     .sub-container-notas-listagem {
-        grid-template-columns: 1fr;
+        grid-template-columns: repeat(auto-fill, minmax(150px, 190px));
         gap: 12px;
         padding: 12px;
     }
@@ -948,8 +1015,74 @@ section:not([hidden]) {
         font-size: 20px;
         margin-bottom: 12px;
     }
-}
 
+    #modal-containerNota,
+    #modal-container {
+        left: 0;
+    }
+
+    .modal-card,
+    .modal-card-nota {
+        width: 95vw;
+        padding: 20px;
+        max-height: 85vh;
+    }
+
+    .modal-card h2,
+    .modal-card-nota h2 {
+        font-size: 22px;
+        margin-bottom: 24px;
+    }
+
+    .button,
+    .modal-card .button,
+    .modal-card-nota .button {
+        width: 100%;
+        padding: 15px 24px;
+        font-size: 16px;
+    }
+
+    .footer {
+        flex-direction: column;
+        gap: 15px;
+        align-items: stretch;
+    }
+
+    /* Container do botão de ação */
+    .toolbar-unir {
+        padding: 10px;
+        background: #1f2937;
+        margin-bottom: 10px;
+        border-radius: 8px;
+        text-align: right;
+    }
+
+    /* ───── NOTA IMAGE ENCAIXADA ───── */
+    .nota-image {
+        width: 100%;
+        margin: 8px 0 0 0;
+        border-radius: 6px;
+        overflow: hidden;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        background-color: rgba(0, 0, 0, 0.05);
+        padding: 5px;
+    }
+
+    .nota-image img {
+        width: 100%;
+        height: auto;
+        max-height: 250px;
+        object-fit: contain;
+        display: block;
+    }
+
+    .nota-paga {
+        background-color: #16a34a;
+        border-color: #15803d;
+    }
+}
 
 @media (max-width: 600px) {
     .navbar {
@@ -961,15 +1094,14 @@ section:not([hidden]) {
         font-size: 16px;
     }
 
-    #clientesConteudo,
-    .sub-container-notas-listagem {
+    #clientesConteudo {
         grid-template-columns: 1fr;
         padding: 8px;
     }
 
-    #clientesConteudo,
     .sub-container-notas-listagem {
-        grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+        grid-template-columns: repeat(auto-fill, minmax(140px, 170px));
+        padding: 8px;
     }
 
     #notas,
@@ -999,7 +1131,7 @@ section:not([hidden]) {
     }
 
     .grid-clientes-nota {
-        grid-template-columns: 1fr;
+        grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
         gap: 12px;
     }
 
@@ -1034,10 +1166,6 @@ section:not([hidden]) {
         font-size: 12px;
     }
 
-    .sub-container-notas-listagem {
-        grid-template-columns: 1fr;
-    }
-
     .nota-fiscal-card-ajuste {
         padding: 12px;
     }
@@ -1056,96 +1184,49 @@ section:not([hidden]) {
         padding: 2px 6px;
     }
 
+    .nota-paga {
+        background-color: #16a34a;
+        border-color: #15803d;
+    }
 }
 
-.loading-txt,
-.sem-notas-txt,
-.erro-txt {
+.selecionada {
+    outline: 2px solid #3b82f6;
+    outline-offset: -2px;
+}
+
+.barra-selecao-notas {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: #1f2937;
+    color: #fff;
+    padding: 10px 16px;
+    border-radius: 8px;
+    margin-bottom: 12px;
+}
+
+.acoes-selecao button {
+    margin-left: 8px;
+}
+
+.grupo-notas-card {
     grid-column: 1 / -1;
-    color: #9ca3af;
-    font-size: 14px;
-    font-style: italic;
-    padding: 15px;
-    text-align: center;
+    border: 1px dashed #6b7280;
+    border-radius: 8px;
+    padding: 10px;
+    margin-bottom: 12px;
 }
 
-.erro-txt {
-    color: #ef4444;
+.grupo-notas-cabecalho {
+    display: flex;
+    justify-content: space-between;
+    cursor: pointer;
 }
 
-
-/* ───── MEDIA QUERIES ───── */
-@media (max-width: 768px) {
-
-    #modal-containerNota,
-    #modal-container {
-        left: 0;
-    }
-
-    .modal-card,
-    .modal-card-nota {
-        width: 95vw;
-        padding: 20px;
-        max-height: 85vh;
-    }
-
-    .modal-card h2,
-    .modal-card-nota h2 {
-        font-size: 22px;
-        margin-bottom: 24px;
-    }
-
-    .grid-two,
-    .grid-three-fourths {
-        grid-template-columns: 1fr;
-    }
-
-    .button,
-    .modal-card .button,
-    .modal-card-nota .button {
-        width: 100%;
-        padding: 15px 24px;
-        font-size: 16px;
-    }
-
-    .footer {
-        flex-direction: column;
-        gap: 15px;
-        align-items: stretch;
-    }
-
-
-    /* Container do botão de ação */
-    .toolbar-unir {
-        padding: 10px;
-        background: #1f2937;
-        margin-bottom: 10px;
-        border-radius: 8px;
-        text-align: right;
-    }
-
-
-    /* ───── NOTA IMAGE ENCAIXADA ───── */
-    .nota-image {
-        width: 100%;
-        margin: 8px 0 0 0;
-        border-radius: 6px;
-        overflow: hidden;
-        display: flex;
-        justify-content: center;
-        align-items: center;
-        background-color: rgba(0, 0, 0, 0.05);
-        padding: 5px;
-    }
-
-    .nota-image img {
-        width: 100%;
-        height: auto;
-        max-height: 250px;
-        object-fit: contain;
-        display: block;
-    }
-
-
-
+.grupo-notas-corpo {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: 10px;
+    margin-top: 10px;
 }

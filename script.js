@@ -505,33 +505,129 @@ document.addEventListener("DOMContentLoaded", () => {
         notasConteudo.appendChild(containerGeral);
     }
 
-    //agrupamento
+    // AGRUPAMENTO / SELEÇÃO DE NOTAS
+    // (declarado uma única vez, fora de carregarNotasDoCliente)
     let modoSelecao = false;
-    const notasSelecionadas = new Set();
+    const notasSelecionadas = new Map(); // nota._id -> { nota, elemento }
+    let containerSelecaoAtivo = null;
+    let barraSelecao = null;
+
+    function criarBarraSelecao(containerAlvo) {
+        if (barraSelecao) barraSelecao.remove();
+
+        barraSelecao = document.createElement("div");
+        barraSelecao.classList.add("barra-selecao-notas");
+        barraSelecao.innerHTML = `
+            <span class="contador-selecao">1 nota selecionada</span>
+            <div class="acoes-selecao">
+                <button class="btn-agrupar">Agrupar Notas</button>
+                <button class="btn-cancelar-selecao">Cancelar</button>
+            </div>
+        `;
+
+        containerAlvo.parentElement.insertBefore(barraSelecao, containerAlvo);
+
+        barraSelecao.querySelector(".btn-agrupar").addEventListener("click", () => {
+            criarGrupoDeNotas(containerAlvo);
+        });
+
+        barraSelecao.querySelector(".btn-cancelar-selecao").addEventListener("click", () => {
+            cancelarModoSelecao();
+        });
+    }
+
+    function atualizarBarra() {
+        if (!barraSelecao) return;
+        const contador = barraSelecao.querySelector(".contador-selecao");
+        contador.textContent = `${notasSelecionadas.size} nota(s) selecionada(s)`;
+    }
+
+    function cancelarModoSelecao() {
+        modoSelecao = false;
+
+        notasSelecionadas.forEach(({ elemento }) => {
+            elemento.classList.remove("selecionada");
+        });
+        notasSelecionadas.clear();
+
+        if (barraSelecao) {
+            barraSelecao.remove();
+            barraSelecao = null;
+        }
+        containerSelecaoAtivo = null;
+    }
+
+    function criarGrupoDeNotas(containerAlvo) {
+        if (notasSelecionadas.size === 0) return;
+
+        const nomeGrupo = prompt("Nome do grupo:", "Novo grupo");
+        if (nomeGrupo === null) return; // cancelou o prompt
+
+        const cardGrupo = document.createElement("div");
+        cardGrupo.classList.add("grupo-notas-card");
+
+        const cabecalhoGrupo = document.createElement("div");
+        cabecalhoGrupo.classList.add("grupo-notas-cabecalho");
+        cabecalhoGrupo.innerHTML = `
+            <h3>${nomeGrupo || "Grupo de notas"}</h3>
+            <span class="seta-status-grupo">▲</span>
+        `;
+
+        const corpoGrupo = document.createElement("div");
+        corpoGrupo.classList.add("grupo-notas-corpo");
+
+        notasSelecionadas.forEach(({ elemento }) => {
+            elemento.classList.remove("selecionada");
+            corpoGrupo.appendChild(elemento); // move o card (não duplica) pro grupo
+        });
+
+        cabecalhoGrupo.addEventListener("click", () => {
+            const estaAberto = corpoGrupo.style.display !== "none";
+            corpoGrupo.style.display = estaAberto ? "none" : "grid";
+            cabecalhoGrupo.querySelector(".seta-status-grupo").textContent = estaAberto ? "▼" : "▲";
+        });
+
+        cardGrupo.appendChild(cabecalhoGrupo);
+        cardGrupo.appendChild(corpoGrupo);
+
+        containerAlvo.prepend(cardGrupo);
+
+        cancelarModoSelecao();
+    }
 
     async function carregarNotasDoCliente(clienteAlvo, containerAlvo) {
         try {
 
-            function marcarComoPago(idNota, pago) {
+            function marcarComoPago(nota, cardNotaItem, btnPago) {
 
-                const mensagem = pago
+                const mensagem = nota.pago
                     ? "Esta nota já está paga. Deseja desmarcá-la?"
                     : "Tem certeza que deseja marcar esta nota como paga?";
 
                 if (!confirm(mensagem)) return;
 
-                fetch(`https://sos-alimentos-servidor.onrender.com/api/notas/${idNota}/pago`, {
+                btnPago.disabled = true;
+
+                fetch(`https://sos-alimentos-servidor.onrender.com/api/notas/${nota._id}/pago`, {
                     method: "PUT"
                 })
                     .then(r => {
                         if (!r.ok) throw new Error();
                         return r.json();
                     })
-                    .then(() => {
-                        alert("Status atualizado!");
-                        renderAbasNotas();
+                    .then((notaAtualizada) => {
+                        nota.pago = notaAtualizada.pago;
+
+                        btnPago.textContent = nota.pago ? "Desmarcar como Pago" : "Marcar como Pago";
+                        cardNotaItem.classList.toggle("nota-paga", nota.pago);
                     })
-                    .catch(console.error);
+                    .catch((erro) => {
+                        console.error(erro);
+                        alert("Erro ao atualizar status da nota.");
+                    })
+                    .finally(() => {
+                        btnPago.disabled = false;
+                    });
             }
 
             const resposta = await fetch(`https://sos-alimentos-servidor.onrender.com/api/notas?_=${Date.now()}`);
@@ -554,6 +650,7 @@ document.addEventListener("DOMContentLoaded", () => {
             notasDoCliente.forEach((nota, index) => {
                 const cardNotaItem = document.createElement("div");
                 cardNotaItem.classList.add("cliente-card", "nota-fiscal-card-ajuste");
+                cardNotaItem.classList.toggle("nota-paga", nota.pago);
 
                 const valorFormatado = parseFloat(nota.valor || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
@@ -578,30 +675,47 @@ document.addEventListener("DOMContentLoaded", () => {
                     <p class="cliente-bairro"><strong>E-mail:</strong> ${nota.email || 'Não informado'}</p>
                     <p class="cliente-rua"><strong>Entrega:</strong> ${nota.entregador || 'Não informado'}</p>
                     <div class="nota-image">
-                        <img src="${nota.img}" alt="Foto da nota" onclick="window.open('${nota.img}', '_blank')">
+                        <img src="${nota.img}" alt="Foto da nota">
                     </div>
                     <button class="btn-marcar-pago">${nota.pago ? "Desmarcar como Pago" : "Marcar como Pago"}</button>
                 `;
+
+                const imgNota = cardNotaItem.querySelector(".nota-image img");
+                imgNota.addEventListener("click", (e) => {
+                    e.stopPropagation();
+                    window.open(nota.img, "_blank");
+                });
 
                 const btnPago = cardNotaItem.querySelector(".btn-marcar-pago");
 
                 btnPago.addEventListener("click", (e) => {
                     e.stopPropagation();
-                    marcarComoPago(nota._id, nota.pago);
+                    marcarComoPago(nota, cardNotaItem, btnPago);
                 });
 
                 cardNotaItem.addEventListener("click", () => {
-                    if (!modoSelecao) return;
+                    console.log("cliquei no card", nota._id, modoSelecao);
+                    if (!modoSelecao) {
+                        modoSelecao = true;
+                        containerSelecaoAtivo = containerAlvo;
+                        criarBarraSelecao(containerAlvo);
+                    }
+
+                    if (containerSelecaoAtivo !== containerAlvo) return; // bloqueia seleção cruzada entre clientes
 
                     if (notasSelecionadas.has(nota._id)) {
                         notasSelecionadas.delete(nota._id);
                         cardNotaItem.classList.remove("selecionada");
                     } else {
-                        notasSelecionadas.add(nota._id);
+                        notasSelecionadas.set(nota._id, { nota, elemento: cardNotaItem });
                         cardNotaItem.classList.add("selecionada");
                     }
 
                     atualizarBarra();
+
+                    if (notasSelecionadas.size === 0) {
+                        cancelarModoSelecao();
+                    }
                 });
 
                 containerAlvo.appendChild(cardNotaItem);
@@ -613,7 +727,6 @@ document.addEventListener("DOMContentLoaded", () => {
         }
 
     }
-
 
     // Relógio da página inicial
     function atualizarRelogio() {
