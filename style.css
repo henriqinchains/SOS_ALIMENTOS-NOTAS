@@ -891,9 +891,14 @@ section:not([hidden]) {
     display: block;
 }
 
-.btn-marcar-pago {
-    width: 100%;
+.nota-card-acoes {
+    display: flex;
+    gap: 6px;
     margin-top: auto;
+}
+
+.btn-marcar-pago {
+    flex: 1;
     padding: 8px 12px;
     border: none;
     border-radius: 8px;
@@ -907,6 +912,23 @@ section:not([hidden]) {
 
 .btn-marcar-pago:hover {
     background: #4b5563;
+}
+
+.btn-excluir-nota {
+    flex-shrink: 0;
+    padding: 8px 10px;
+    border: 1px solid #ef4444;
+    border-radius: 8px;
+    background: transparent;
+    color: #f87171;
+    font-size: 12px;
+    cursor: pointer;
+    transition: 0.2s;
+}
+
+.btn-excluir-nota:hover {
+    background: #ef4444;
+    color: white;
 }
 
 /* Destaque visual quando a nota já está paga */
@@ -935,8 +957,8 @@ section:not([hidden]) {
 
 .barra-selecao-notas {
     display: flex;
-    justify-content: space-between;
-    align-items: center;
+    flex-direction: column;
+    gap: 10px;
     background: #1f2937;
     color: #fff;
     padding: 10px 16px;
@@ -944,8 +966,98 @@ section:not([hidden]) {
     margin-bottom: 12px;
 }
 
+.barra-selecao-linha-principal {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.barra-selecao-grupo-existente {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding-top: 8px;
+    border-top: 1px solid #374151;
+}
+
+.select-grupo-existente {
+    flex: 1;
+    padding: 8px 10px;
+    border-radius: 8px;
+    border: 1px solid #374151;
+    background: #0f172a;
+    color: #e5e7eb;
+    cursor: pointer;
+}
+
+.btn-confirmar-adicionar-grupo {
+    padding: 8px 14px;
+    border: none;
+    border-radius: 8px;
+    background: #3b82f6;
+    color: white;
+    cursor: pointer;
+    font-weight: 600;
+    transition: 0.2s;
+}
+
+.btn-confirmar-adicionar-grupo:hover {
+    background: #2563eb;
+}
+
 .acoes-selecao button {
     margin-left: 8px;
+    padding: 8px 14px;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 13px;
+    font-weight: 600;
+    transition: 0.2s;
+}
+
+/* Botão de cancelar: discreto, sem chamar atenção */
+.btn-ghost {
+    background: transparent;
+    border: 1px solid #374151;
+    color: #9ca3af;
+}
+
+.btn-ghost:hover {
+    background: #374151;
+    color: #e5e7eb;
+}
+
+/* Ação secundária: neutra, um degrau abaixo da ação principal */
+.btn-secundario {
+    background: #374151;
+    color: #e5e7eb;
+}
+
+.btn-secundario:hover {
+    background: #4b5563;
+}
+
+/* Ação principal: mais destacada, sempre a última (mais à direita) */
+.btn-primario {
+    background: #3b82f6;
+    color: white;
+}
+
+.btn-primario:hover {
+    background: #2563eb;
+}
+
+/* Ação destrutiva: vermelho, avisa que não tem volta */
+.btn-perigo {
+    background: transparent;
+    border: 1px solid #ef4444;
+    color: #f87171;
+}
+
+.btn-perigo:hover {
+    background: #ef4444;
+    color: white;
 }
 
 /* Card de grupo: colapsado ocupa uma célula normal do grid,
@@ -1074,9 +1186,16 @@ section:not([hidden]) {
 .grupo-notas-rodape {
     display: flex;
     align-items: center;
+    justify-content: space-between;
     gap: 10px;
     padding: 10px 14px;
     border-top: 1px solid #374151;
+}
+
+.grupo-notas-rodape-acoes {
+    display: flex;
+    align-items: center;
+    gap: 8px;
 }
 
 .btn-editar-grupo {
@@ -1122,7 +1241,6 @@ section:not([hidden]) {
 .seta-status-grupo {
     color: #60a5fa;
     font-size: 13px;
-    margin-left: auto;
 }
 
 .grupo-notas-corpo {
@@ -1403,4 +1521,54 @@ section:not([hidden]) {
         font-size: 11px;
         padding: 2px 6px;
     }
+}
+
+/* ═══════════════════════════════════════ */
+/* ───── LIXEIRA ───── */
+/* ═══════════════════════════════════════ */
+
+.nota-lixeira-card {
+    border: 1px solid rgba(239, 68, 68, 0.35);
+}
+
+.lixeira-card-acoes {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin-top: auto;
+}
+
+.btn-restaurar-nota {
+    width: 100%;
+    padding: 8px 12px;
+    border: none;
+    border-radius: 8px;
+    background: #374151;
+    color: #f9fafb;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: 0.2s;
+}
+
+.btn-restaurar-nota:hover {
+    background: #10b981;
+}
+
+.btn-excluir-permanente {
+    width: 100%;
+    padding: 8px 12px;
+    border: 1px solid #ef4444;
+    border-radius: 8px;
+    background: transparent;
+    color: #f87171;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: 0.2s;
+}
+
+.btn-excluir-permanente:hover {
+    background: #ef4444;
+    color: white;
 }

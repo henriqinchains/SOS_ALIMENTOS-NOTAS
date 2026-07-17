@@ -30,6 +30,7 @@ const inputDataEmissao = document.getElementById("dataEmissao");
 const listaClientes = document.getElementById("listaClientes");
 
 let todosClientes = [];
+let contadorNotasPorCliente = new Map(); // clienteId -> elemento <span> da contagem na aba Notas
 
 // AGRUPAMENTO / SELEÇÃO DE NOTAS
 // (declarado uma única vez, fora de carregarNotasDoCliente)
@@ -38,6 +39,8 @@ const notasSelecionadas = new Map(); // nota._id -> { nota, elemento }
 let containerSelecaoAtivo = null;
 let clienteSelecaoAtivo = null;
 let gruposSelecaoAtivo = []; // grupos existentes do cliente que está com seleção ativa
+let origemSelecao = null; // 'solta' (notas soltas) ou 'grupo' (notas dentro de um grupo já existente)
+let grupoOrigemSelecaoId = null; // qual grupo, quando origemSelecao === 'grupo'
 let barraSelecao = null;
 
 document.addEventListener("DOMContentLoaded", () => {
@@ -84,6 +87,10 @@ document.addEventListener("DOMContentLoaded", () => {
             // Força a atualização da lista ao clicar na aba
             if (page === "notas") {
                 renderAbasNotas();
+            }
+
+            if (page === "lixeira") {
+                renderLixeira();
             }
         });
     });
@@ -406,6 +413,8 @@ document.addEventListener("DOMContentLoaded", () => {
         const notasToolbar = document.getElementById("notasToolbar");
         if (!notasConteudo) return;
 
+        contadorNotasPorCliente = new Map();
+
         const respostaNotas = await fetch(`https://sos-alimentos-servidor.onrender.com/api/notas?_=${Date.now()}`);
         const notas = await respostaNotas.json();
 
@@ -466,7 +475,7 @@ document.addEventListener("DOMContentLoaded", () => {
                     <div class="cliente-nota-card-content">
                         <div class="indicador-info">
                             <strong>${cliente.cliente}</strong>
-                            <span class="quantidade-notas" id="quantidade-notas">${cliente.quantidadeNotas > 0 ? `${cliente.quantidadeNotas} nota(s)` : "Cliente sem notas no momento."}</span>
+                            <span class="quantidade-notas">${cliente.quantidadeNotas > 0 ? `${cliente.quantidadeNotas} nota(s)` : "Cliente sem notas no momento."}</span>
                         </div>
                         <div class="cliente-info-grid">
                         <span>${cliente.endereco ? `${cliente.endereco}` : 'Endereço não cadastrado'}</span>
@@ -477,6 +486,8 @@ document.addEventListener("DOMContentLoaded", () => {
                     </div>
                     <span class="seta-status">▼</span>
                 `;
+
+                contadorNotasPorCliente.set(String(cliente._id), cardLinkCliente.querySelector(".quantidade-notas"));
 
                 const containerNotasCliente = document.createElement("div");
                 containerNotasCliente.classList.add("sub-container-notas-listagem");
@@ -522,6 +533,133 @@ document.addEventListener("DOMContentLoaded", () => {
 
 
     // ==========================================
+    // SEÇÃO LIXEIRA
+    // ==========================================
+    async function renderLixeira() {
+        const lixeiraConteudo = document.getElementById("lixeiraConteudo");
+        const lixeiraToolbar = document.getElementById("lixeiraToolbar");
+        if (!lixeiraConteudo) return;
+
+        lixeiraConteudo.innerHTML = "<p style='color:#9ca3af; padding:20px;'>Carregando...</p>";
+        if (lixeiraToolbar) lixeiraToolbar.innerHTML = "";
+
+        try {
+            const resposta = await fetch(`https://sos-alimentos-servidor.onrender.com/api/notas/lixeira?_=${Date.now()}`);
+            const notas = await resposta.json();
+
+            if (lixeiraToolbar) {
+                const toolbar = document.createElement("div");
+                toolbar.classList.add("clientes-toolbar");
+                toolbar.innerHTML = `<h2 style="color: white; font-size: 20px; padding: 10px 0;">Notas Excluídas (${notas.length})</h2>`;
+                lixeiraToolbar.appendChild(toolbar);
+            }
+
+            lixeiraConteudo.innerHTML = "";
+
+            if (notas.length === 0) {
+                lixeiraConteudo.innerHTML = "<p class='sem-notas-txt'>A lixeira está vazia.</p>";
+                return;
+            }
+
+            const grid = document.createElement("div");
+            grid.classList.add("sub-container-notas-listagem");
+
+            notas.forEach(nota => {
+                grid.appendChild(criarCardNotaLixeira(nota));
+            });
+
+            lixeiraConteudo.appendChild(grid);
+
+        } catch (erro) {
+            console.error(erro);
+            lixeiraConteudo.innerHTML = "<p class='erro-txt'>Erro ao carregar a lixeira.</p>";
+        }
+    }
+
+    // Cria o card de uma nota dentro da Lixeira, com botões de restaurar e excluir definitivamente
+    function criarCardNotaLixeira(nota) {
+        const card = document.createElement("div");
+        card.classList.add("cliente-card", "nota-fiscal-card-ajuste", "nota-lixeira-card");
+
+        const valorFormatado = parseFloat(nota.valor || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+
+        let dataFormatada = 'Não informada';
+        if (nota.dataEmissao) {
+            const apenasData = nota.dataEmissao.split('T')[0];
+            const partes = apenasData.split('-');
+            if (partes.length === 3) {
+                dataFormatada = `${partes[2]}/${partes[1]}/${partes[0]}`;
+            }
+        }
+
+        let deletadoFormatado = 'Não informada';
+        if (nota.deletadoEm) {
+            const d = new Date(nota.deletadoEm);
+            if (!isNaN(d)) deletadoFormatado = d.toLocaleDateString('pt-BR');
+        }
+
+        card.innerHTML = `
+            <div class="cliente-topo">
+                <h3>${nota.cliente || "Cliente"} — Nota Nº ${nota.numeroNota || "-"}</h3>
+                <span class="nota-tag-valor">${valorFormatado}</span>
+            </div>
+            <p class="cliente-rua"><strong>Emissão:</strong> ${dataFormatada}</p>
+            <p class="cliente-bairro"><strong>Excluída em:</strong> ${deletadoFormatado}</p>
+            <div class="nota-image">
+                <img src="${nota.img}" alt="Foto da nota">
+            </div>
+            <div class="lixeira-card-acoes">
+                <button class="btn-restaurar-nota" type="button">♻️ Restaurar</button>
+                <button class="btn-excluir-permanente" type="button">🗑️ Excluir Definitivamente</button>
+            </div>
+        `;
+
+        const imgNota = card.querySelector(".nota-image img");
+        imgNota.addEventListener("click", () => window.open(nota.img, "_blank"));
+
+        card.querySelector(".btn-restaurar-nota").addEventListener("click", async () => {
+            const confirmar = confirm("Restaurar esta nota? Ela volta a aparecer normalmente.");
+            if (!confirmar) return;
+
+            try {
+                const resposta = await fetch(`https://sos-alimentos-servidor.onrender.com/api/notas/${nota._id}/restaurar`, {
+                    method: "PUT"
+                });
+
+                if (!resposta.ok) throw new Error();
+
+                await renderLixeira();
+
+            } catch (erro) {
+                console.error(erro);
+                alert("Erro ao restaurar nota.");
+            }
+        });
+
+        card.querySelector(".btn-excluir-permanente").addEventListener("click", async () => {
+            const confirmar = confirm("Excluir esta nota DEFINITIVAMENTE? Essa ação não pode ser desfeita.");
+            if (!confirmar) return;
+
+            try {
+                const resposta = await fetch(`https://sos-alimentos-servidor.onrender.com/api/notas/${nota._id}/permanente`, {
+                    method: "DELETE"
+                });
+
+                if (!resposta.ok) throw new Error();
+
+                await renderLixeira();
+
+            } catch (erro) {
+                console.error(erro);
+                alert("Erro ao excluir nota permanentemente.");
+            }
+        });
+
+        return card;
+    }
+
+
+    // ==========================================
     // BARRA DE SELEÇÃO (modo agrupar)
     // ==========================================
     function criarBarraSelecao(containerAlvo) {
@@ -529,26 +667,72 @@ document.addEventListener("DOMContentLoaded", () => {
 
         barraSelecao = document.createElement("div");
         barraSelecao.classList.add("barra-selecao-notas");
-        barraSelecao.innerHTML = `
-            <span class="contador-selecao">1 nota selecionada</span>
-            <div class="acoes-selecao">
-                <button class="btn-agrupar">Agrupar Notas</button>
-                ${gruposSelecaoAtivo.length > 0 ? `<button class="btn-adicionar-grupo">Adicionar a Grupo</button>` : ""}
-                <button class="btn-cancelar-selecao">Cancelar</button>
-            </div>
-        `;
 
-        containerAlvo.parentElement.insertBefore(barraSelecao, containerAlvo);
+        if (origemSelecao === "grupo") {
+            // Notas selecionadas já pertencem a um grupo: só faz sentido
+            // desagrupar (soltar do grupo) ou excluir as notas de verdade
+            barraSelecao.innerHTML = `
+                <div class="barra-selecao-linha-principal">
+                    <span class="contador-selecao">1 nota selecionada</span>
+                    <div class="acoes-selecao">
+                        <button class="btn-cancelar-selecao btn-ghost">Cancelar</button>
+                        <button class="btn-desagrupar btn-secundario">Desagrupar</button>
+                        <button class="btn-excluir-notas-grupo btn-perigo">Excluir Notas</button>
+                    </div>
+                </div>
+            `;
 
-        barraSelecao.querySelector(".btn-agrupar").addEventListener("click", () => {
-            criarGrupoDeNotas(containerAlvo);
-        });
+            containerAlvo.parentElement.insertBefore(barraSelecao, containerAlvo);
 
-        const btnAdicionarGrupo = barraSelecao.querySelector(".btn-adicionar-grupo");
-        if (btnAdicionarGrupo) {
-            btnAdicionarGrupo.addEventListener("click", () => {
-                adicionarNotasAGrupoExistente(containerAlvo);
+            barraSelecao.querySelector(".btn-desagrupar").addEventListener("click", () => {
+                desagruparNotasSelecionadas(containerAlvo);
             });
+
+            barraSelecao.querySelector(".btn-excluir-notas-grupo").addEventListener("click", () => {
+                excluirNotasSelecionadasDoGrupo(containerAlvo);
+            });
+
+        } else {
+            // Notas soltas: pode formar um grupo novo ou adicionar a um já existente
+            barraSelecao.innerHTML = `
+                <div class="barra-selecao-linha-principal">
+                    <span class="contador-selecao">1 nota selecionada</span>
+                    <div class="acoes-selecao">
+                        <button class="btn-cancelar-selecao btn-ghost">Cancelar</button>
+                        ${gruposSelecaoAtivo.length > 0 ? `<button class="btn-adicionar-grupo btn-secundario">Adicionar a Grupo</button>` : ""}
+                        <button class="btn-agrupar btn-primario">Agrupar Notas</button>
+                    </div>
+                </div>
+                ${gruposSelecaoAtivo.length > 0 ? `
+                <div class="barra-selecao-grupo-existente" style="display: none;">
+                    <select class="select-grupo-existente">
+                        ${gruposSelecaoAtivo.map(g => `<option value="${g._id}">${g.nomeTexto} (${g.periodoTexto})${g.observacao ? " — " + g.observacao : ""}</option>`).join("")}
+                    </select>
+                    <button class="btn-confirmar-adicionar-grupo btn-primario">Confirmar</button>
+                </div>
+                ` : ""}
+            `;
+
+            containerAlvo.parentElement.insertBefore(barraSelecao, containerAlvo);
+
+            barraSelecao.querySelector(".btn-agrupar").addEventListener("click", () => {
+                criarGrupoDeNotas(containerAlvo);
+            });
+
+            const btnAdicionarGrupo = barraSelecao.querySelector(".btn-adicionar-grupo");
+            const linhaGrupoExistente = barraSelecao.querySelector(".barra-selecao-grupo-existente");
+
+            if (btnAdicionarGrupo && linhaGrupoExistente) {
+                btnAdicionarGrupo.addEventListener("click", () => {
+                    const estaVisivel = linhaGrupoExistente.style.display !== "none";
+                    linhaGrupoExistente.style.display = estaVisivel ? "none" : "flex";
+                });
+
+                barraSelecao.querySelector(".btn-confirmar-adicionar-grupo").addEventListener("click", () => {
+                    const select = barraSelecao.querySelector(".select-grupo-existente");
+                    adicionarNotasAGrupoExistente(containerAlvo, select.value);
+                });
+            }
         }
 
         barraSelecao.querySelector(".btn-cancelar-selecao").addEventListener("click", () => {
@@ -577,46 +761,120 @@ document.addEventListener("DOMContentLoaded", () => {
         containerSelecaoAtivo = null;
         clienteSelecaoAtivo = null;
         gruposSelecaoAtivo = [];
+        origemSelecao = null;
+        grupoOrigemSelecaoId = null;
     }
 
-    // Adiciona as notas selecionadas a um grupo já existente do cliente
-    // (faz merge com as notas que já estavam no grupo, sem duplicar)
-    async function adicionarNotasAGrupoExistente(containerAlvo) {
+    // Remove as notas selecionadas de um grupo (elas voltam a ficar soltas).
+    // Se o grupo ficar sem nenhuma nota, o grupo em si é excluído (evita grupo vazio órfão).
+    async function desagruparNotasSelecionadas(containerAlvo) {
         if (notasSelecionadas.size === 0) return;
-        if (!clienteSelecaoAtivo) return;
-        if (gruposSelecaoAtivo.length === 0) return;
+        if (!clienteSelecaoAtivo || !grupoOrigemSelecaoId) return;
 
-        let grupoEscolhido = null;
+        const clienteAlvo = clienteSelecaoAtivo;
+        const grupoId = grupoOrigemSelecaoId;
+        const notasIdRemover = new Set(notasSelecionadas.keys());
 
-        if (gruposSelecaoAtivo.length === 1) {
-            grupoEscolhido = gruposSelecaoAtivo[0];
-            const confirmar = confirm(`Adicionar ${notasSelecionadas.size} nota(s) ao grupo "${grupoEscolhido.observacao || "Grupo de Notas"}"?`);
-            if (!confirmar) return;
-        } else {
-            const listaTexto = gruposSelecaoAtivo
-                .map((g, i) => `${i + 1}) ${g.observacao || "Grupo de Notas"}`)
-                .join("\n");
+        const confirmar = confirm(`Remover ${notasIdRemover.size} nota(s) deste grupo? As notas voltam a ficar soltas.`);
+        if (!confirmar) return;
 
-            const escolha = prompt(`Escolha o grupo pelo número:\n${listaTexto}`, "1");
-            if (escolha === null) return; // cancelou
+        try {
+            const respostaGrupos = await fetch(`https://sos-alimentos-servidor.onrender.com/api/grupos?idCliente=${clienteAlvo._id}&_=${Date.now()}`);
+            const gruposAtuais = respostaGrupos.ok ? await respostaGrupos.json() : [];
+            const grupoAtual = gruposAtuais.find(g => String(g._id) === String(grupoId));
 
-            const indice = parseInt(escolha, 10) - 1;
-            if (isNaN(indice) || indice < 0 || indice >= gruposSelecaoAtivo.length) {
-                alert("Opção inválida.");
+            if (!grupoAtual) {
+                cancelarModoSelecao();
+                await carregarNotasDoCliente(clienteAlvo, containerAlvo);
                 return;
             }
 
-            grupoEscolhido = gruposSelecaoAtivo[indice];
-        }
+            const notasIdRestantes = (grupoAtual.notasId || [])
+                .map(id => String(id))
+                .filter(id => !notasIdRemover.has(id));
 
-        const notasIdExistentes = (grupoEscolhido.notasId || []).map(id => String(id));
-        const notasIdNovas = Array.from(notasSelecionadas.keys());
-        const notasIdFinal = Array.from(new Set([...notasIdExistentes, ...notasIdNovas]));
+            if (notasIdRestantes.length === 0) {
+                // Grupo ficaria vazio: exclui o grupo em vez de deixar um card sem notas
+                const resposta = await fetch(`https://sos-alimentos-servidor.onrender.com/api/grupos/${grupoAtual._id}`, {
+                    method: "DELETE"
+                });
+                if (!resposta.ok) throw new Error();
+            } else {
+                const resposta = await fetch(`https://sos-alimentos-servidor.onrender.com/api/grupos/${grupoAtual._id}`, {
+                    method: "PUT",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ notasId: notasIdRestantes })
+                });
+                if (!resposta.ok) throw new Error();
+            }
+
+            cancelarModoSelecao();
+            await carregarNotasDoCliente(clienteAlvo, containerAlvo);
+
+        } catch (erro) {
+            console.error(erro);
+            alert("Erro ao desagrupar notas.");
+        }
+    }
+
+    // Exclui de fato as notas selecionadas (soft delete), estejam elas dentro de um grupo ou não
+    async function excluirNotasSelecionadasDoGrupo(containerAlvo) {
+        if (notasSelecionadas.size === 0) return;
+        if (!clienteSelecaoAtivo) return;
 
         const clienteAlvo = clienteSelecaoAtivo;
+        const notasIdExcluir = Array.from(notasSelecionadas.keys());
+
+        const confirmar = confirm(`Excluir ${notasIdExcluir.length} nota(s)? Essa ação não pode ser desfeita.`);
+        if (!confirmar) return;
 
         try {
-            const resposta = await fetch(`https://sos-alimentos-servidor.onrender.com/api/grupos/${grupoEscolhido._id}`, {
+            await Promise.all(
+                notasIdExcluir.map(id =>
+                    put(`https://sos-alimentos-servidor.onrender.com/api/notas/${id}`, { method: "PUT", body: JSON.stringify({ deletado: true }) })
+                )
+            );
+
+            cancelarModoSelecao();
+            await carregarNotasDoCliente(clienteAlvo, containerAlvo);
+
+        } catch (erro) {
+            console.error(erro);
+            alert("Erro ao excluir notas.");
+        }
+    }
+
+    // Adiciona as notas selecionadas a um grupo já existente do cliente
+    // (busca o grupo atualizado direto do backend antes de mesclar, pra
+    // garantir que o card mostre corretamente a nota recém-adicionada)
+    async function adicionarNotasAGrupoExistente(containerAlvo, grupoId) {
+        if (notasSelecionadas.size === 0) return;
+        if (!clienteSelecaoAtivo) return;
+        if (!grupoId) return;
+
+        const clienteAlvo = clienteSelecaoAtivo;
+        const notasIdNovas = Array.from(notasSelecionadas.keys());
+
+        const confirmar = confirm(`Adicionar ${notasIdNovas.length} nota(s) ao grupo selecionado?`);
+        if (!confirmar) return;
+
+        try {
+            // Busca o grupo direto do backend (evita mesclar com uma versão desatualizada)
+            const respostaGrupos = await fetch(`https://sos-alimentos-servidor.onrender.com/api/grupos?idCliente=${clienteAlvo._id}&_=${Date.now()}`);
+            const gruposAtuais = respostaGrupos.ok ? await respostaGrupos.json() : [];
+            const grupoAtual = gruposAtuais.find(g => String(g._id) === String(grupoId));
+
+            if (!grupoAtual) {
+                alert("Este grupo não existe mais.");
+                cancelarModoSelecao();
+                await carregarNotasDoCliente(clienteAlvo, containerAlvo);
+                return;
+            }
+
+            const notasIdExistentes = (grupoAtual.notasId || []).map(id => String(id));
+            const notasIdFinal = Array.from(new Set([...notasIdExistentes, ...notasIdNovas]));
+
+            const resposta = await fetch(`https://sos-alimentos-servidor.onrender.com/api/grupos/${grupoAtual._id}`, {
                 method: "PUT",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ notasId: notasIdFinal })
@@ -712,6 +970,10 @@ document.addEventListener("DOMContentLoaded", () => {
         const totalGrupoFormatado = totalGrupo.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
         const todasPagas = notasDoGrupo.length > 0 && totalNaoPago === 0;
 
+        // Nome do grupo = data em que ele foi criado (agrupado), não o período das notas
+        const dataCriacao = grupo.dataCriacao ? new Date(grupo.dataCriacao) : null;
+        const nomeGrupo = dataCriacao ? `Grupo de ${formatarDataCurta(dataCriacao)}` : "Grupo de Notas";
+
         // Função compartilhada de exclusão (usada tanto pelo botão do rodapé
         // quanto pelo aviso que aparece quando todas as notas já estão pagas)
         async function excluirGrupo() {
@@ -738,9 +1000,13 @@ document.addEventListener("DOMContentLoaded", () => {
         cardGrupo.innerHTML = `
             <div class="grupo-notas-topo">
                 <span class="grupo-notas-icone">📦</span>
-                <h3 class="grupo-notas-titulo-texto">Período: ${formatarDataCurta(dataMaisAntiga)} – ${formatarDataCurta(dataMaisRecente)}</h3>
+                <h3 class="grupo-notas-titulo-texto">${nomeGrupo}</h3>
             </div>
             <div class="grupo-notas-info">
+                <div class="grupo-notas-info-linha">
+                    <span class="grupo-notas-info-label">Período das notas</span>
+                    <span class="grupo-notas-info-valor">${formatarDataCurta(dataMaisAntiga)} – ${formatarDataCurta(dataMaisRecente)}</span>
+                </div>
                 <div class="grupo-notas-info-linha">
                     <span class="grupo-notas-info-label">Total do período</span>
                     <span class="grupo-notas-info-valor grupo-notas-valor-total-destaque">${totalGrupoFormatado}</span>
@@ -763,9 +1029,11 @@ document.addEventListener("DOMContentLoaded", () => {
                 ` : ""}
             </div>
             <div class="grupo-notas-rodape">
-                <button class="btn-editar-grupo" title="Editar observação">✏️ Editar</button>
-                <button class="btn-excluir-grupo" title="Excluir grupo">🗑️ Excluir</button>
                 <span class="seta-status-grupo">▼</span>
+                <div class="grupo-notas-rodape-acoes">
+                    <button class="btn-editar-grupo" title="Editar observação">✏️ Editar</button>
+                    <button class="btn-excluir-grupo" title="Excluir grupo">🗑️ Excluir</button>
+                </div>
             </div>
         `;
 
@@ -897,7 +1165,10 @@ document.addEventListener("DOMContentLoaded", () => {
                     <div class="nota-image">
                         <img src="${nota.img}" alt="Foto da nota">
                     </div>
-                    <button class="btn-marcar-pago">${nota.pago ? "Desmarcar como Pago" : "Marcar como Pago"}</button>
+                    <div class="nota-card-acoes">
+                        <button class="btn-marcar-pago">${nota.pago ? "Desmarcar como Pago" : "Marcar como Pago"}</button>
+                        <button class="btn-excluir-nota" type="button" title="Excluir nota">🗑️</button>
+                    </div>
                 `;
 
                 const imgNota = cardNotaItem.querySelector(".nota-image img");
@@ -909,28 +1180,83 @@ document.addEventListener("DOMContentLoaded", () => {
                 const btnPago = cardNotaItem.querySelector(".btn-marcar-pago");
 
                 btnPago.addEventListener("click", (e) => {
+                    e.preventDefault();
                     e.stopPropagation();
                     marcarComoPago(nota, cardNotaItem, btnPago);
                 });
 
-                cardNotaItem.addEventListener("click", (e) => {
-                    // Notas que já pertencem a um grupo não podem ser selecionadas pra
-                    // formar outro grupo (evita mover a nota de um grupo pro outro por engano)
-                    // e o clique não deve borbulhar pro card do grupo (senão ele fecha/abre sem querer)
-                    if (cardNotaItem.closest(".grupo-notas-card")) {
-                        e.stopPropagation();
-                        return;
+                const btnExcluirNota = cardNotaItem.querySelector(".btn-excluir-nota");
+
+                btnExcluirNota.addEventListener("click", async (e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+
+                    const confirmar = confirm("Excluir esta nota? Ela vai para a Lixeira e pode ser restaurada de lá.");
+                    if (!confirmar) return;
+
+                    btnExcluirNota.disabled = true;
+
+                    try {
+                        const resposta = await fetch(`https://sos-alimentos-servidor.onrender.com/api/notas/${nota._id}`, {
+                            method: "DELETE"
+                        });
+
+                        if (!resposta.ok) throw new Error();
+
+                        await carregarNotasDoCliente(clienteAlvo, containerAlvo);
+
+                    } catch (erro) {
+                        console.error(erro);
+                        alert("Erro ao excluir nota.");
+                        btnExcluirNota.disabled = false;
                     }
+                });
+
+                cardNotaItem.addEventListener("click", (e) => {
+                    // O clique nunca deve borbulhar pro card do grupo (senão ele fecha/abre sem querer)
+                    e.stopPropagation();
+
+                    const grupoAncestralEl = cardNotaItem.closest(".grupo-notas-card");
+                    const grupoIdAncestral = grupoAncestralEl ? grupoAncestralEl.dataset.grupoId : null;
 
                     if (!modoSelecao) {
                         modoSelecao = true;
                         containerSelecaoAtivo = containerAlvo;
                         clienteSelecaoAtivo = clienteAlvo;
-                        gruposSelecaoAtivo = grupos; // grupos já existentes deste cliente, pra oferecer "Adicionar a Grupo"
+
+                        if (grupoIdAncestral) {
+                            // Selecionando notas DENTRO de um grupo: só faz sentido desagrupar ou excluir
+                            origemSelecao = "grupo";
+                            grupoOrigemSelecaoId = grupoIdAncestral;
+                            gruposSelecaoAtivo = [];
+                        } else {
+                            // Selecionando notas SOLTAS: pode criar grupo novo ou adicionar a um existente
+                            origemSelecao = "solta";
+                            grupoOrigemSelecaoId = null;
+
+                            // Calcula o nome (data de criação) e o período das notas de cada grupo,
+                            // pra exibir no dropdown de "Adicionar a Grupo"
+                            gruposSelecaoAtivo = grupos.map(g => {
+                                const notasDoGrupo = (g.notasId || [])
+                                    .map(id => notaPorId.get(String(id)))
+                                    .filter(Boolean);
+                                const { dataMaisAntiga, dataMaisRecente } = calcularInfoGrupo(notasDoGrupo);
+                                const dataCriacao = g.dataCriacao ? new Date(g.dataCriacao) : null;
+                                const nomeTexto = dataCriacao ? `Grupo de ${formatarDataCurta(dataCriacao)}` : "Grupo de Notas";
+                                const periodoTexto = `${formatarDataCurta(dataMaisAntiga)} – ${formatarDataCurta(dataMaisRecente)}`;
+                                return { ...g, nomeTexto, periodoTexto };
+                            });
+                        }
+
                         criarBarraSelecao(containerAlvo);
                     }
 
                     if (containerSelecaoAtivo !== containerAlvo) return; // bloqueia seleção cruzada entre clientes
+
+                    // Bloqueia misturar nota solta com nota de grupo, ou notas de grupos diferentes
+                    const origemDestaNota = grupoIdAncestral ? "grupo" : "solta";
+                    if (origemDestaNota !== origemSelecao) return;
+                    if (origemSelecao === "grupo" && grupoIdAncestral !== grupoOrigemSelecaoId) return;
 
                     if (notasSelecionadas.has(nota._id)) {
                         notasSelecionadas.delete(nota._id);
@@ -964,6 +1290,15 @@ document.addEventListener("DOMContentLoaded", () => {
 
                 return bateuPorNome;
             });
+
+            // Mantém o "X nota(s)" do card do cliente (na listagem de fora) sempre em dia,
+            // sem precisar recarregar a aba inteira
+            const spanContador = contadorNotasPorCliente.get(String(clienteAlvo._id));
+            if (spanContador) {
+                spanContador.textContent = notasDoCliente.length > 0
+                    ? `${notasDoCliente.length} nota(s)`
+                    : "Cliente sem notas no momento.";
+            }
 
             containerAlvo.innerHTML = "";
 
