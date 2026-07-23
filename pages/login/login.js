@@ -20,7 +20,19 @@ async function checarLogin() {
 document.addEventListener("DOMContentLoaded", () => {
     checarLogin();
     initLogin();
+    initCadastro();
 });
+
+function Switch() {
+    document.getElementById("login-section").style.display = "none";
+    document.getElementById("register-section").style.display = "block";
+}
+
+function SwitchBack() {
+    document.getElementById("register-section").style.display = "none";
+    document.getElementById("login-section").style.display = "block";
+}
+
 
 
 // login
@@ -73,6 +85,78 @@ function initLogin() {
         } finally {
             button.disabled = false;
             button.textContent = "Entrar";
+        }
+    });
+}
+
+//REALIZAR CADASTRO
+function initCadastro() {
+    const formCadastro = document.getElementById("formCadastro");
+    if (!formCadastro) return;
+
+    formCadastro.addEventListener("submit", async (e) => {
+        e.preventDefault();
+
+        const usuario = document.getElementById("usuario-cadastro").value;
+        const telefone = document.getElementById("telefone-cadastro").value;
+        const senha = document.getElementById("senha-cadastro").value;
+        const confirmacaoSenha = document.getElementById(
+            "confirm-senha-cadastro",
+        ).value;
+        const message = document.getElementById("cadastro-message");
+
+        if (senha !== confirmacaoSenha) {
+            message.style.display = "block";
+            message.textContent =
+                "As senhas não coincidem. Por favor, tente novamente.";
+            message.style.color = "#C1442E";
+            document.getElementById("confirm-senha-cadastro").value = "";
+            setTimeout(() => {
+                message.style.display = "none";
+            }, 3000);
+            return;
+        }
+
+        message.textContent = "Enviando...";
+        message.style.color = "#5C6B58";
+        message.style.display = "block";
+
+        try {
+            const resposta = await fetch(`${API_URL}/auth/cadastro`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                    nome: usuario,
+                    telefone: telefone,
+                    password: senha,
+                }),
+                credentials: "include",
+            });
+
+            const dados = await resposta.json();
+
+            if (resposta.ok) {
+                message.textContent = `✅ ${dados.mensagem}`;
+                message.style.color = "#4C7A4A";
+
+                formCadastro.reset();
+
+                window.setTimeout(() => {
+                    window.location.href = "../../";
+                }, 2000);
+            } else {
+                message.textContent = `❌ ${dados.erro || "Erro ao cadastrar."}`;
+                message.style.color = "#C1442E";
+                setTimeout(() => {
+                    message.style.display = "none";
+                }, 3000);
+            }
+        } catch (error) {
+            message.textContent = "❌ Erro ao conectar com o servidor.";
+            message.style.color = "#C1442E";
+            setTimeout(() => {
+                message.style.display = "none";
+            }, 3000);
         }
     });
 }

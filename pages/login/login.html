@@ -29,6 +29,55 @@
 
                 <div class="opcoes-extras"></div>
             </form>
+            <p style="
+              font-weight: 600;
+              padding-left: 12px;
+              color: #5C6B58;
+              margin-top: 15px;
+            ">
+                Novo aqui?
+                <a href="#" onclick="
+                Switch();
+                return false;
+              ">Crie uma conta</a>
+            </p>
+        </section>
+
+        <section id="register-section" style="display: none" class="login-card">
+            <p class="eyebrow">Bem-vindo</p>
+            <h1>SOS <span>Alimentos🍎</span></h1>
+            <p class="subtitle">Crie uma conta.</p>
+
+            <form id="formCadastro">
+                <label for="usuario-cadastro">Usuário</label>
+                <input type="text" id="usuario-cadastro" name="usuario" placeholder="Digite seu nome de usuário"
+                    required />
+
+                <label for="telefone-cadastro">Telefone</label>
+                <input type="text" id="telefone-cadastro" name="senha" placeholder="Digite seu telefone" required />
+
+                <label for="senha-cadastro">Senha</label>
+                <input type="password" id="senha-cadastro" name="senha" placeholder="Digite sua senha" required />
+
+                <label for="confirm-senha-cadastro">Confirmar Senha</label>
+                <input type="password" id="confirm-senha-cadastro" name="confirm-senha"
+                    placeholder="Digite sua senha novamente" required />
+
+                <button type="submit" id="register-button">Criar</button>
+                <p style="display: none" id="cadastro-message" aria-live="polite"></p>
+                <p style="
+              font-weight: 600;
+              padding-left: 12px;
+              color: #5C6B58;
+              margin-top: 15px;
+            ">
+                    Já possui uma conta?
+                    <a href="#" onclick="
+                SwitchBack();
+                return false;
+              ">Faça login</a>
+                </p>
+            </form>
         </section>
     </main>
     <script src="login.js" defer></script>
