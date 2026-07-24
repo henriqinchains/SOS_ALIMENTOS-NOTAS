@@ -70,6 +70,13 @@ async function verificarSessao() {
         sessionStorage.setItem("cache_usuario", loggedUser);
         sessionStorage.setItem("cache_cargo", userRole);
 
+        // Esta página é só de admin/financeiro. Entregador não pode acessar,
+        // então já manda ele de volta pra página dele antes de montar a interface.
+        if (userRole === "entregador") {
+            window.location.href = "./pages/entregas/entrega.html";
+            return false;
+        }
+
         inicializarInterface(dadosUsuario);
         return true;
     } catch (erro) {
@@ -1174,9 +1181,12 @@ document.addEventListener("DOMContentLoaded", async () => {
                     method: "PUT",
                     credentials: "include"
                 })
-                    .then(r => {
-                        if (!r.ok) throw new Error();
-                        return r.json();
+                    .then(async r => {
+                        const dados = await r.json().catch(() => ({}));
+                        if (!r.ok) {
+                            throw new Error(dados.erro || dados.error || `Erro ${r.status} ao atualizar nota.`);
+                        }
+                        return dados;
                     })
                     .then((notaAtualizada) => {
                         nota.pago = notaAtualizada.pago;
@@ -1190,7 +1200,7 @@ document.addEventListener("DOMContentLoaded", async () => {
                     })
                     .catch((erro) => {
                         console.error(erro);
-                        alert("Erro ao atualizar status da nota.");
+                        alert(erro.message || "Erro ao atualizar status da nota.");
                     })
                     .finally(() => {
                         btnPago.disabled = false;
