@@ -58,7 +58,7 @@ async function verificarSessao() {
 
         if (!resposta.ok) {
             sessionStorage.clear();
-            window.location.href = "../pages/login/login.html";
+            window.location.href = "./pages/login/login.html";
             return false;
         }
 
