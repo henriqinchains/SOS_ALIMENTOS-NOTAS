@@ -1,0 +1,134 @@
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+:root {
+    --verde: #2D5A3D;
+    --verde-hover: #244A32;
+    --fundo: #f5f7f4;
+    --branco: #ffffff;
+    --texto: #2b2b2b;
+    --borda: #d8ddd8;
+    --sombra: 0 12px 30px rgba(0, 0, 0, .08);
+    --radius: 14px;
+}
+
+body {
+    min-height: 100vh;
+    font-family: Arial, Helvetica, sans-serif;
+    background: var(--fundo);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    color: var(--texto);
+}
+
+.container {
+    width: 100%;
+    display: flex;
+    justify-content: center;
+    padding: 20px;
+}
+
+.card-entrega {
+    width: 100%;
+    max-width: 430px;
+    background: var(--branco);
+    border-radius: var(--radius);
+    box-shadow: var(--sombra);
+    padding: 32px;
+}
+
+.card-entrega h2 {
+    text-align: center;
+    margin-bottom: 8px;
+    color: var(--verde);
+}
+
+.card-entrega p {
+    text-align: center;
+    margin-bottom: 28px;
+    color: #666;
+    font-size: .95rem;
+}
+
+#form-entrega {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+}
+
+.campo {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.campo label {
+    font-weight: 600;
+    font-size: .95rem;
+}
+
+.campo input {
+    width: 100%;
+    padding: 12px 14px;
+    border: 1px solid var(--borda);
+    border-radius: 10px;
+    font-size: .95rem;
+    transition: .2s;
+}
+
+.campo input:focus {
+    outline: none;
+    border-color: var(--verde);
+    box-shadow: 0 0 0 3px rgba(45, 90, 61, .15);
+}
+
+input[type="file"] {
+    padding: 10px;
+    cursor: pointer;
+}
+
+input[type="file"]::file-selector-button {
+    border: none;
+    background: var(--verde);
+    color: white;
+    padding: 10px 16px;
+    border-radius: 8px;
+    cursor: pointer;
+    margin-right: 12px;
+    transition: .2s;
+}
+
+input[type="file"]::file-selector-button:hover {
+    background: var(--verde-hover);
+}
+
+#btnEnviar {
+    margin-top: 8px;
+    border: none;
+    background: var(--verde);
+    color: white;
+    padding: 14px;
+    border-radius: 10px;
+    font-size: 1rem;
+    font-weight: bold;
+    cursor: pointer;
+    transition: .2s;
+}
+
+#btnEnviar:hover {
+    background: var(--verde-hover);
+}
+
+#btnEnviar:active {
+    transform: scale(.98);
+}
+
+@media (max-width: 500px) {
+    .card-entrega {
+        padding: 24px;
+    }
+}
