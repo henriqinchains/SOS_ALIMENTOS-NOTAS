@@ -9,10 +9,21 @@ async function checarLogin() {
         });
 
         if (response.ok) {
-            window.location.href = "../../";
+            const dados = await response.json();
+            redirecionarPorCargo(dados.cargo);
         }
     } catch (error) {
         console.error("Erro ao verificar sessão inicial:", error);
+    }
+}
+
+// Centraliza a lógica de "pra onde cada cargo deve ir"
+function redirecionarPorCargo(cargo) {
+    if (cargo === "entregador") {
+        window.location.href = "../entregas/entrega.html";
+    } else {
+        // admin e financeiro caem na página principal
+        window.location.href = "../../";
     }
 }
 
@@ -76,8 +87,7 @@ function initLogin() {
                 form.reset();
 
                 window.setTimeout(() => {
-                    // Caminho corrigido!
-                    window.location.href = "../../";
+                    redirecionarPorCargo(data.cargo);
                 }, 1500);
             }
         } catch (error) {
