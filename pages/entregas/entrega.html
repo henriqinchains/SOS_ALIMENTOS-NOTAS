@@ -20,10 +20,11 @@
 
                 <div class="campo">
                     <label for="cliente">Cliente</label>
-                    <input type="text" id="cliente" name="cliente" list="lista-clientes"
-                        placeholder="Digite ou selecione um cliente" autocomplete="off" required>
-
-                    <div class="autocomplete-list"></div>
+                    <div class="autocomplete">
+                        <input type="text" id="cliente" name="cliente" placeholder="Digite ou selecione um cliente"
+                            autocomplete="off" required>
+                        <div id="lista-clientes" class="autocomplete-list"></div>
+                    </div>
                 </div>
 
                 <div class="campo">
@@ -34,7 +35,7 @@
 
                 <div class="campo">
                     <label for="imagemNota">Imagem da Nota Fiscal</label>
-                    <input type="file" id="img" name="img" accept="image/*" capture="environment">
+                    <input type="file" id="imagemNota" name="img" accept="image/*" capture="environment">
                 </div>
 
                 <button type="submit" id="btnEnviar">

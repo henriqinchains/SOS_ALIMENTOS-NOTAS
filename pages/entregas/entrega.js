@@ -107,7 +107,32 @@ async function buscarClienteSelecionado() {
     await buscarNumeroNota(clienteSelecionado._id);
 }
 
+// =========================
+// Buscar próximo número da nota
+// =========================
+async function buscarNumeroNota(idCliente) {
+    try {
+        const resposta = await fetch(`${API_URL}/notas?_=${Date.now()}`, {
+            credentials: "include"
+        });
 
+        if (!resposta.ok) {
+            throw new Error("Erro ao buscar notas.");
+        }
+
+        const notas = await resposta.json();
+
+        const notasCliente = notas.filter(n =>
+            String(n.idCliente) === String(idCliente)
+        );
+
+        numeroNota = notasCliente.length + 1;
+
+    } catch (erro) {
+        console.error(erro);
+        numeroNota = 1;
+    }
+}
 
 // =========================
 // Enviar nota
