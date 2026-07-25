@@ -110,9 +110,11 @@ async function buscarClienteSelecionado() {
 // =========================
 // Buscar próximo número da nota
 // =========================
+// CORREÇÃO: GET /api/notas é restrito a financeiro/admin (403 pro entregador),
+// então usamos a rota de contagem, liberada pra qualquer usuário logado.
 async function buscarNumeroNota(idCliente) {
     try {
-        const resposta = await fetch(`${API_URL}/notas?_=${Date.now()}`, {
+        const resposta = await fetch(`${API_URL}/notas/contagem/${idCliente}?_=${Date.now()}`, {
             credentials: "include"
         });
 
@@ -120,13 +122,8 @@ async function buscarNumeroNota(idCliente) {
             throw new Error("Erro ao buscar notas.");
         }
 
-        const notas = await resposta.json();
-
-        const notasCliente = notas.filter(n =>
-            String(n.idCliente) === String(idCliente)
-        );
-
-        numeroNota = notasCliente.length + 1;
+        const dados = await resposta.json();
+        numeroNota = dados.quantidade + 1;
 
     } catch (erro) {
         console.error(erro);

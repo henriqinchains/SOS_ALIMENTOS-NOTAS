@@ -32,6 +32,9 @@ const listaClientes = document.getElementById("listaClientes");
 let todosClientes = [];
 let contadorNotasPorCliente = new Map(); // clienteId -> elemento <span> da contagem na aba Notas
 
+let loggedUser = sessionStorage.getItem("cache_usuario") || "";
+let userRole = sessionStorage.getItem("cache_cargo") || "user";
+
 // AGRUPAMENTO / SELEÇÃO DE NOTAS
 // (declarado uma única vez, fora de carregarNotasDoCliente)
 let modoSelecao = false;
