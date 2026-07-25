@@ -25,14 +25,6 @@ async function carregarClientes() {
 
         todosClientes = await resposta.json();
 
-        listaClientes.innerHTML = "";
-
-        todosClientes.forEach(cliente => {
-            const option = document.createElement("option");
-            option.value = cliente.cliente;
-            listaClientes.appendChild(option);
-        });
-
     } catch (erro) {
         console.error(erro);
         alert("Erro ao carregar clientes.");
@@ -40,10 +32,66 @@ async function carregarClientes() {
 }
 
 // =========================
-// Buscar cliente selecionado
+// Autocomplete customizado
 // =========================
+inputCliente.addEventListener("input", () => {
+    if (inputCliente.value.trim()) {
+        mostrarSugestoes(inputCliente.value);
+    } else {
+        listaClientes.classList.remove("active");
+        listaClientes.style.display = "none";
+        listaClientes.innerHTML = "";
+        clienteSelecionado = null;
+    }
+});
+
 inputCliente.addEventListener("change", buscarClienteSelecionado);
 
+function mostrarSugestoes(texto) {
+    listaClientes.innerHTML = "";
+
+    if (texto.length === 0) {
+        listaClientes.style.display = "none";
+        return;
+    }
+
+    const encontrados = todosClientes.filter(cliente =>
+        cliente.cliente.toLowerCase().includes(texto.toLowerCase())
+    );
+
+    if (encontrados.length === 0) {
+        listaClientes.style.display = "none";
+        return;
+    }
+
+    encontrados.forEach(cliente => {
+        const item = document.createElement("div");
+        item.className = "autocomplete-item";
+        item.textContent = cliente.cliente;
+
+        item.addEventListener("click", () => {
+            inputCliente.value = cliente.cliente;
+            listaClientes.style.display = "none";
+            buscarClienteSelecionado();
+        });
+
+        listaClientes.appendChild(item);
+    });
+
+    listaClientes.style.display = "block";
+}
+
+// Fechar lista de autocomplete quando clicar fora
+document.addEventListener("click", (e) => {
+    if (!e.target.closest(".autocomplete")) {
+        listaClientes.classList.remove("active");
+        listaClientes.style.display = "none";
+    }
+});
+
+// =========================
+// Buscar cliente selecionado
+// =========================
 async function buscarClienteSelecionado() {
     const nome = inputCliente.value.trim();
 
@@ -59,32 +107,7 @@ async function buscarClienteSelecionado() {
     await buscarNumeroNota(clienteSelecionado._id);
 }
 
-// =========================
-// Buscar próximo número da nota
-// =========================
-async function buscarNumeroNota(idCliente) {
-    try {
-        const resposta = await fetch(`${API_URL}/notas?_=${Date.now()}`, {
-            credentials: "include"
-        });
 
-        if (!resposta.ok) {
-            throw new Error("Erro ao buscar notas.");
-        }
-
-        const notas = await resposta.json();
-
-        const notasCliente = notas.filter(n =>
-            String(n.idCliente) === String(idCliente)
-        );
-
-        numeroNota = notasCliente.length + 1;
-
-    } catch (erro) {
-        console.error(erro);
-        numeroNota = 1;
-    }
-}
 
 // =========================
 // Enviar nota
@@ -93,7 +116,8 @@ formEntrega.addEventListener("submit", async (e) => {
     e.preventDefault();
 
     if (!clienteSelecionado) {
-        alert("Selecione um cliente válido.");
+        alert("Selecione um cliente válido da lista sugerida.");
+        inputCliente.focus();
         return;
     }
 
@@ -131,6 +155,8 @@ formEntrega.addEventListener("submit", async (e) => {
         formEntrega.reset();
         clienteSelecionado = null;
         numeroNota = 1;
+        listaClientes.innerHTML = "";
+        listaClientes.style.display = "none";
 
     } catch (erro) {
         console.error(erro);
