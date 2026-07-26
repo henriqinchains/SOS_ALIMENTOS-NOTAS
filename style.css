@@ -162,6 +162,17 @@ img {
     color: var(--papel);
 }
 
+#btnSair {
+    border-color: rgba(83, 0, 25, 0.5);
+    color: #992400;
+    background-color: #241605;
+}
+
+#btnSair:hover {
+    background: rgb(92, 0, 0);
+    color: var(--papel);
+}
+
 /* ============================================================
    MAIN / LAYOUT GERAL
    ============================================================ */

@@ -10,7 +10,13 @@
 
 <body>
 
+    <header class="topo">
+        <span class="topo-titulo">SOS Alimentos</span>
+        <button type="button" id="btnSair" class="btn-sair">Sair</button>
+    </header>
+
     <main class="container">
+        
         <div class="card-entrega">
 
             <h2>Registrar Entrega</h2>
@@ -35,18 +41,40 @@
 
                 <div class="campo">
                     <label for="imagemNota">Imagem da Nota Fiscal</label>
-                    <input type="file" id="imagemNota" name="img" accept="image/*" capture="environment">
+                    <div class="campo-arquivo">
+                        <label for="imagemNota" class="btn-arquivo">Escolher arquivo</label>
+                        <span id="nomeArquivo" class="nome-arquivo">Nenhum arquivo selecionado</span>
+                        <input type="file" id="imagemNota" name="img" accept="image/*" capture="environment"
+                            class="input-arquivo-oculto">
+                    </div>
                 </div>
 
                 <button type="submit" id="btnEnviar">
                     Enviar
                 </button>
-
+                
             </form>
 
         </div>
     </main>
     <script src="entrega.js" defer></script>
+    <script>
+        // Evento de Logout
+        document.getElementById("btnSair").addEventListener("click", async (event) => {
+            event.preventDefault();
+            try {
+                await fetch("https://sos-alimentos-servidor.onrender.com/api/auth/logout", {
+                    method: "POST",
+                    credentials: "include",
+                });
+            } catch (erro) {
+                console.error("Erro ao fazer logout na API:", erro);
+            } finally {
+                sessionStorage.clear();
+                window.location.href = "../login/login.html";
+            }
+        });
+    </script>
 </body>
 
 </html>

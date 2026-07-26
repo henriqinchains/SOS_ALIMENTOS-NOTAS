@@ -1,175 +1,358 @@
+@import url("https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600;9..144,700&family=Work+Sans:wght@400;500;600&family=Space+Mono:wght@400;700&display=swap");
+
+:root {
+    --verde-mata: #142A20;
+    --verde-mata-2: #1D3B2C;
+    --papel: #FAF3E2;
+    --papel-sombra: #EDE3C8;
+    --tinta: #20291F;
+    --tinta-suave: #5C6B58;
+    --dourado: #E3A23C;
+    --dourado-escuro: #B9772A;
+    --tomate: #C1442E;
+    --folha: #4C7A4A;
+
+    --fonte-display: "Fraunces", serif;
+    --fonte-texto: "Work Sans", sans-serif;
+    --fonte-utilitaria: "Space Mono", monospace;
+}
+
 * {
-    margin: 0;
-    padding: 0;
     box-sizing: border-box;
 }
 
-:root {
-    --verde: #2D5A3D;
-    --verde-hover: #244A32;
-    --fundo: #f5f7f4;
-    --branco: #ffffff;
-    --texto: #2b2b2b;
-    --texto-muted: #6b6b6b;
-    --borda: #d8ddd8;
-    --sombra: 0 12px 30px rgba(0, 0, 0, .08);
-    --sombra-dropdown: 0 10px 24px rgba(0, 0, 0, .12);
-    --radius: 14px;
+html,
+body {
+    height: 100%;
 }
 
 body {
-    min-height: 100vh;
-    font-family: Arial, Helvetica, sans-serif;
-    background: var(--fundo);
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    color: var(--texto);
+    margin: 0;
+    font-family: var(--fonte-texto);
+    color: var(--tinta);
+    background-color: var(--verde-mata);
+    background-image:
+        radial-gradient(circle at 1px 1px, rgba(250, 243, 226, 0.08) 1px, transparent 0);
+    background-size: 22px 22px;
+    min-height: 100%;
 }
+
+/* ---------- Topo / barra de sessão ---------- */
+
+.topo {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 16px 20px;
+    background: var(--verde-mata-2);
+    border-bottom: 1px solid rgba(250, 243, 226, 0.08);
+}
+
+.topo-titulo {
+    font-family: var(--fonte-display);
+    font-weight: 600;
+    font-size: 18px;
+    color: var(--papel);
+    letter-spacing: 0.01em;
+}
+
+.btn-sair {
+    font-family: var(--fonte-utilitaria);
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    padding: 9px 14px;
+    border: 1.5px solid rgba(250, 243, 226, 0.3);
+    border-radius: 3px;
+    background: transparent;
+    color: var(--papel);
+    cursor: pointer;
+    transition: border-color 0.15s ease, background 0.15s ease, color 0.15s ease;
+}
+
+.btn-sair:hover {
+    border-color: var(--tomate);
+    background: rgba(193, 68, 46, 0.15);
+    color: #fff;
+}
+
+.btn-sair:focus-visible {
+    outline: 2px solid var(--dourado);
+    outline-offset: 2px;
+}
+
+/* ---------- Layout geral ---------- */
 
 .container {
-    width: 100%;
+    min-height: calc(100vh - 60px);
     display: flex;
+    align-items: center;
     justify-content: center;
-    padding: 20px;
+    padding: 32px 20px 48px;
 }
 
+/* ---------- Cartão de registro (recibo) ---------- */
+
 .card-entrega {
+    position: relative;
     width: 100%;
-    max-width: 430px;
-    background: var(--branco);
-    border-radius: var(--radius);
-    box-shadow: var(--sombra);
-    padding: 32px;
+    max-width: 420px;
+    background: var(--papel);
+    border-radius: 4px;
+    padding: 40px 32px 36px;
+    box-shadow:
+        0 1px 0 rgba(255, 255, 255, 0.4) inset,
+        0 30px 60px -20px rgba(6, 16, 10, 0.55);
+    border: 1px solid rgba(20, 42, 32, 0.08);
+    overflow: visible;
+}
+
+/* Serrilha de cupom fiscal no topo do card */
+.card-entrega::before {
+    content: "";
+    position: absolute;
+    top: 22px;
+    left: 28px;
+    right: 28px;
+    height: 0;
+    border-top: 2px dashed var(--papel-sombra);
+}
+
+/* Carimbo — elemento assinatura, ecoa o selo do login como "recibo em trânsito" */
+.card-entrega::after {
+    content: "EM ROTA";
+    position: absolute;
+    top: -18px;
+    right: -14px;
+    width: 74px;
+    height: 74px;
+    border-radius: 50%;
+    border: 2px dashed var(--tomate);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transform: rotate(-10deg);
+    background: var(--papel);
+    color: var(--tomate);
+    font-family: var(--fonte-utilitaria);
+    font-size: 9px;
+    letter-spacing: 0.05em;
+    text-align: center;
+    line-height: 1.3;
+    text-transform: uppercase;
+    box-shadow: 0 6px 14px -6px rgba(193, 68, 46, 0.4);
+    user-select: none;
 }
 
 .card-entrega h2 {
-    text-align: center;
-    margin-bottom: 8px;
-    color: var(--verde);
+    font-family: var(--fonte-display);
+    font-optical-sizing: auto;
+    font-weight: 600;
+    font-size: 28px;
+    line-height: 1.1;
+    margin: 0 0 8px;
+    color: var(--tinta);
 }
 
-.card-entrega p {
-    text-align: center;
-    margin-bottom: 28px;
-    color: #666;
-    font-size: .95rem;
+.card-entrega > p {
+    font-size: 14px;
+    color: var(--tinta-suave);
+    margin: 0 0 30px;
 }
 
-#form-entrega {
+/* ---------- Formulário ---------- */
+
+form {
     display: flex;
     flex-direction: column;
-    gap: 20px;
 }
 
 .campo {
     display: flex;
     flex-direction: column;
-    gap: 8px;
 }
 
-.campo label {
-    font-weight: 600;
-    font-size: .95rem;
+.campo:not(:first-of-type) {
+    margin-top: 20px;
 }
 
-.campo input {
-    width: 100%;
+label {
+    font-family: var(--fonte-utilitaria);
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--tinta-suave);
+    margin-bottom: 6px;
+}
+
+input[type="text"],
+input[type="number"] {
+    font-family: var(--fonte-texto);
+    font-size: 15px;
     padding: 12px 14px;
-    border: 1px solid var(--borda);
-    border-radius: 10px;
-    font-size: .95rem;
-    transition: .2s;
-}
-
-.campo input:focus {
+    border: 1.5px solid var(--papel-sombra);
+    border-radius: 3px;
+    background: #fff;
+    color: var(--tinta);
     outline: none;
-    border-color: var(--verde);
-    box-shadow: 0 0 0 3px rgba(45, 90, 61, .15);
+    width: 100%;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
 }
 
-input[type="file"] {
-    padding: 10px;
-    cursor: pointer;
+input::placeholder {
+    color: #b9b2a0;
 }
 
-input[type="file"]::file-selector-button {
+input:focus {
+    border-color: var(--folha);
+    box-shadow: 0 0 0 3px rgba(76, 122, 74, 0.18);
+}
+
+input:focus-visible {
+    outline: 2px solid var(--folha);
+    outline-offset: 2px;
+}
+
+input[type="number"]::-webkit-inner-spin-button,
+input[type="number"]::-webkit-outer-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+}
+
+/* Campo de imagem — o input nativo fica escondido (mas acessível/focável);
+   o botão e o nome do arquivo abaixo são elementos nossos, com texto em PT-BR */
+.input-arquivo-oculto {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+}
+
+.campo-arquivo {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 12px;
+    border: 1.5px dashed var(--papel-sombra);
+    border-radius: 3px;
+    background: var(--papel-sombra);
+    transition: border-color 0.15s ease;
+}
+
+.campo-arquivo:focus-within {
+    outline: 2px solid var(--folha);
+    outline-offset: 2px;
+    border-color: var(--folha);
+}
+
+.btn-arquivo {
+    font-family: var(--fonte-utilitaria);
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    padding: 9px 14px;
     border: none;
-    background: var(--verde);
-    color: white;
-    padding: 10px 16px;
-    border-radius: 8px;
+    border-radius: 3px;
+    background: var(--folha);
+    color: var(--papel);
     cursor: pointer;
-    margin-right: 12px;
-    transition: .2s;
+    white-space: nowrap;
+    transition: background 0.15s ease;
 }
 
-input[type="file"]::file-selector-button:hover {
-    background: var(--verde-hover);
+.btn-arquivo:hover {
+    background: var(--verde-mata-2);
 }
 
-/* ---------- Autocomplete do campo Cliente ---------- */
+.nome-arquivo {
+    font-size: 13px;
+    color: var(--tinta-suave);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* ---------- Autocomplete de cliente ---------- */
 
 .autocomplete {
     position: relative;
 }
 
 .autocomplete-list {
-    display: none;
     position: absolute;
-    top: calc(100% + 6px);
+    top: calc(100% + 4px);
     left: 0;
     right: 0;
-    background: var(--branco);
-    border: 1px solid var(--borda);
-    border-radius: 10px;
-    box-shadow: var(--sombra-dropdown);
     max-height: 220px;
     overflow-y: auto;
-    z-index: 20;
+    background: #fff;
+    border: 1.5px solid var(--papel-sombra);
+    border-radius: 3px;
+    box-shadow: 0 12px 24px -12px rgba(6, 16, 10, 0.35);
+    z-index: 10;
+    display: none;
 }
 
-.autocomplete-list.active {
+.autocomplete-list:not(:empty) {
     display: block;
 }
 
 .autocomplete-item {
     padding: 11px 14px;
-    font-size: .95rem;
-    color: var(--texto);
+    font-size: 14px;
+    color: var(--tinta);
     cursor: pointer;
-    border-bottom: 1px solid var(--borda);
-    transition: background .15s ease;
+    border-bottom: 1px solid var(--papel-sombra);
 }
 
 .autocomplete-item:last-child {
     border-bottom: none;
 }
 
-.autocomplete-item:hover {
-    background: rgba(45, 90, 61, .08);
-    color: var(--verde);
+.autocomplete-item:hover,
+.autocomplete-item--ativo {
+    background: rgba(76, 122, 74, 0.1);
+    color: var(--folha);
 }
 
-#btnEnviar {
-    margin-top: 8px;
+/* ---------- Botão de envio ---------- */
+
+button#btnEnviar {
+    margin-top: 28px;
+    font-family: var(--fonte-texto);
+    font-weight: 600;
+    font-size: 15px;
+    padding: 14px 18px;
     border: none;
-    background: var(--verde);
-    color: white;
-    padding: 14px;
-    border-radius: 10px;
-    font-size: 1rem;
-    font-weight: bold;
+    border-radius: 3px;
+    background: var(--dourado);
+    color: #241605;
     cursor: pointer;
-    transition: .2s;
+    transition: background 0.15s ease, transform 0.1s ease;
 }
 
-#btnEnviar:hover {
-    background: var(--verde-hover);
+button#btnEnviar:hover:not(:disabled) {
+    background: var(--dourado-escuro);
+    color: var(--papel);
 }
 
-#btnEnviar:active {
-    transform: scale(.98);
+button#btnEnviar:active:not(:disabled) {
+    transform: translateY(1px);
+}
+
+button#btnEnviar:focus-visible {
+    outline: 2px solid var(--folha);
+    outline-offset: 2px;
+}
+
+button#btnEnviar:disabled {
+    opacity: 0.7;
+    cursor: wait;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -178,8 +361,16 @@ input[type="file"]::file-selector-button:hover {
     }
 }
 
-@media (max-width: 500px) {
+@media (max-width: 420px) {
     .card-entrega {
-        padding: 24px;
+        padding: 34px 22px 28px;
+    }
+
+    .card-entrega h2 {
+        font-size: 24px;
+    }
+
+    .topo {
+        padding: 14px 16px;
     }
 }

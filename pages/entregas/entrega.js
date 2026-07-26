@@ -4,11 +4,50 @@ const formEntrega = document.getElementById("form-entrega");
 const inputCliente = document.getElementById("cliente");
 const inputValor = document.getElementById("valorNota");
 const inputImagem = document.getElementById("imagemNota");
+const nomeArquivo = document.getElementById("nomeArquivo");
+
+inputImagem.addEventListener("change", () => {
+    nomeArquivo.textContent = inputImagem.files.length
+        ? inputImagem.files[0].name
+        : "Nenhum arquivo selecionado";
+});
 const listaClientes = document.getElementById("lista-clientes");
 
 let todosClientes = [];
 let clienteSelecionado = null;
 let numeroNota = 1;
+
+// =========================
+// Sessão / controle de acesso
+// =========================
+// Esta página é exclusiva do entregador. Admin e financeiro não podem
+// acessá-la, e usuário sem sessão válida é mandado de volta pro login.
+async function verificarSessaoEntregador() {
+    try {
+        const resposta = await fetch(`${API_URL}/auth/me`, {
+            method: "GET",
+            credentials: "include",
+        });
+
+        if (!resposta.ok) {
+            window.location.href = "../login/login.html";
+            return false;
+        }
+
+        const dados = await resposta.json();
+
+        if (dados.cargo === "admin" || dados.cargo === "financeiro") {
+            window.location.href = "../../";
+            return false;
+        }
+
+        return true;
+    } catch (erro) {
+        console.error("Erro ao verificar sessão:", erro);
+        window.location.href = "../login/login.html";
+        return false;
+    }
+}
 
 // =========================
 // Carregar clientes
@@ -32,37 +71,26 @@ async function carregarClientes() {
 }
 
 // =========================
-// Autocomplete customizado
+// Autocomplete de cliente
 // =========================
 inputCliente.addEventListener("input", () => {
-    if (inputCliente.value.trim()) {
-        mostrarSugestoes(inputCliente.value);
-    } else {
-        listaClientes.classList.remove("active");
-        listaClientes.style.display = "none";
-        listaClientes.innerHTML = "";
-        clienteSelecionado = null;
-    }
-});
+    clienteSelecionado = null;
 
-inputCliente.addEventListener("change", buscarClienteSelecionado);
+    const texto = inputCliente.value.trim();
+    if (!texto) {
+        listaClientes.innerHTML = "";
+        return;
+    }
+
+    mostrarSugestoes(texto);
+});
 
 function mostrarSugestoes(texto) {
     listaClientes.innerHTML = "";
 
-    if (texto.length === 0) {
-        listaClientes.style.display = "none";
-        return;
-    }
-
     const encontrados = todosClientes.filter(cliente =>
         cliente.cliente.toLowerCase().includes(texto.toLowerCase())
     );
-
-    if (encontrados.length === 0) {
-        listaClientes.style.display = "none";
-        return;
-    }
 
     encontrados.forEach(cliente => {
         const item = document.createElement("div");
@@ -71,50 +99,32 @@ function mostrarSugestoes(texto) {
 
         item.addEventListener("click", () => {
             inputCliente.value = cliente.cliente;
-            listaClientes.style.display = "none";
-            buscarClienteSelecionado();
+            listaClientes.innerHTML = "";
+            selecionarCliente(cliente);
         });
 
         listaClientes.appendChild(item);
     });
-
-    listaClientes.style.display = "block";
 }
 
-// Fechar lista de autocomplete quando clicar fora
+// Fecha a lista ao clicar fora do campo de autocomplete
 document.addEventListener("click", (e) => {
     if (!e.target.closest(".autocomplete")) {
-        listaClientes.classList.remove("active");
-        listaClientes.style.display = "none";
+        listaClientes.innerHTML = "";
     }
 });
 
-// =========================
-// Buscar cliente selecionado
-// =========================
-async function buscarClienteSelecionado() {
-    const nome = inputCliente.value.trim();
-
-    clienteSelecionado = todosClientes.find(c =>
-        c.cliente.toLowerCase() === nome.toLowerCase()
-    );
-
-    if (!clienteSelecionado) {
-        numeroNota = 1;
-        return;
-    }
-
-    await buscarNumeroNota(clienteSelecionado._id);
+async function selecionarCliente(cliente) {
+    clienteSelecionado = cliente;
+    await buscarNumeroNota(cliente._id);
 }
 
 // =========================
 // Buscar próximo número da nota
 // =========================
-// CORREÇÃO: GET /api/notas é restrito a financeiro/admin (403 pro entregador),
-// então usamos a rota de contagem, liberada pra qualquer usuário logado.
 async function buscarNumeroNota(idCliente) {
     try {
-        const resposta = await fetch(`${API_URL}/notas/contagem/${idCliente}?_=${Date.now()}`, {
+        const resposta = await fetch(`${API_URL}/notas?_=${Date.now()}`, {
             credentials: "include"
         });
 
@@ -122,8 +132,13 @@ async function buscarNumeroNota(idCliente) {
             throw new Error("Erro ao buscar notas.");
         }
 
-        const dados = await resposta.json();
-        numeroNota = dados.quantidade + 1;
+        const notas = await resposta.json();
+
+        const notasCliente = notas.filter(n =>
+            String(n.idCliente) === String(idCliente)
+        );
+
+        numeroNota = notasCliente.length + 1;
 
     } catch (erro) {
         console.error(erro);
@@ -138,8 +153,7 @@ formEntrega.addEventListener("submit", async (e) => {
     e.preventDefault();
 
     if (!clienteSelecionado) {
-        alert("Selecione um cliente válido da lista sugerida.");
-        inputCliente.focus();
+        alert("Selecione um cliente válido.");
         return;
     }
 
@@ -175,10 +189,9 @@ formEntrega.addEventListener("submit", async (e) => {
         alert("Nota cadastrada com sucesso!");
 
         formEntrega.reset();
+        nomeArquivo.textContent = "Nenhum arquivo selecionado";
         clienteSelecionado = null;
         numeroNota = 1;
-        listaClientes.innerHTML = "";
-        listaClientes.style.display = "none";
 
     } catch (erro) {
         console.error(erro);
@@ -189,4 +202,9 @@ formEntrega.addEventListener("submit", async (e) => {
 // =========================
 // Inicialização
 // =========================
-carregarClientes();
+(async function iniciar() {
+    const sessaoValida = await verificarSessaoEntregador();
+    if (!sessaoValida) return; // já redirecionou, não carrega mais nada
+
+    carregarClientes();
+})();

@@ -22,6 +22,7 @@
             <div class="sidebar-actions">
                 <button id="btnAbrirModalCliente">+ Cliente</button>
                 <button id="btnNovaNota">+ Nota</button>
+                <button id="btnSair">Sair</button>
             </div>
         </nav>
     </aside>
@@ -157,6 +158,23 @@
 
 
     <script src="script.js"></script>
+    <script>
+        // Evento de Logout
+        document.getElementById("btnSair").addEventListener("click", async (event) => {
+            event.preventDefault();
+            try {
+                await fetch("https://sos-alimentos-servidor.onrender.com/api/auth/logout", {
+                    method: "POST",
+                    credentials: "include",
+                });
+            } catch (erro) {
+                console.error("Erro ao fazer logout na API:", erro);
+            } finally {
+                sessionStorage.clear();
+                window.location.href = "./pages/login/login.html";
+            }
+        });
+    </script>
 </body>
 
 </html>
