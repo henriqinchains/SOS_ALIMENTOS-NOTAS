@@ -506,6 +506,53 @@ input[type="file"] {
     padding: 8px 10px;
 }
 
+/* ---------- Busca de CNPJ ---------- */
+
+.campo-com-botao {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 4px;
+}
+
+.campo-com-botao input {
+    flex: 1;
+    margin-top: 0;
+}
+
+.btn-icone {
+    flex-shrink: 0;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 44px;
+    height: 44px;
+    padding: 0;
+    line-height: 1;
+    border: 1.5px solid var(--papel-sombra);
+    border-radius: 4px;
+    background: var(--branco);
+    color: var(--folha);
+    font-size: 18px;
+    cursor: pointer;
+    transition: border-color 0.15s ease, background 0.15s ease, color 0.15s ease;
+}
+
+.btn-icone:hover:not(:disabled) {
+    border-color: var(--folha);
+    background: var(--folha-clara);
+}
+
+.btn-icone:disabled {
+    opacity: 0.6;
+    cursor: wait;
+}
+
+.btn-icone:focus-visible {
+    outline: 2px solid var(--folha);
+    outline-offset: 2px;
+}
+
 .button,
 #btnSubmitCliente,
 #btnSubmitNota {

@@ -5,6 +5,7 @@ const inputCliente = document.getElementById("cliente");
 const inputValor = document.getElementById("valorNota");
 const inputImagem = document.getElementById("imagemNota");
 const nomeArquivo = document.getElementById("nomeArquivo");
+const btnSubmitNota = document.getElementById("btnEnviar")
 
 inputImagem.addEventListener("change", () => {
     nomeArquivo.textContent = inputImagem.files.length
@@ -152,6 +153,10 @@ async function buscarNumeroNota(idCliente) {
 formEntrega.addEventListener("submit", async (e) => {
     e.preventDefault();
 
+    btnSubmitNota.disabled = true;
+    btnSubmitNota.innerText = "Enviando...";
+
+
     if (!clienteSelecionado) {
         alert("Selecione um cliente válido.");
         return;
@@ -192,6 +197,9 @@ formEntrega.addEventListener("submit", async (e) => {
         nomeArquivo.textContent = "Nenhum arquivo selecionado";
         clienteSelecionado = null;
         numeroNota = 1;
+
+        btnSubmitNota.disabled = false;
+        btnSubmitNota.innerText = "Enviar"
 
     } catch (erro) {
         console.error(erro);

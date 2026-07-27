@@ -45,6 +45,11 @@ let origemSelecao = null; // 'solta' (notas soltas) ou 'grupo' (notas dentro de 
 let grupoOrigemSelecaoId = null; // qual grupo, quando origemSelecao === 'grupo'
 let barraSelecao = null;
 
+const inputCnpj = document.getElementById('cnpj');
+const btnBuscarCnpj = document.getElementById('btnBuscarCnpj');
+const inputTelefoneCliente = document.getElementById('telefone');
+const inputRazaoSocial = document.getElementById('razao_social');
+
 let loggedUser = sessionStorage.getItem("cache_usuario") || "";
 let userRole = sessionStorage.getItem("cache_cargo") || "user";
 
@@ -104,6 +109,157 @@ async function fetchAutenticado(url, options = {}) {
     }
 
     return resposta;
+}
+
+// ==================== BUSCA DE CNPJ (BrasilAPI) ====================
+
+// Valida o CNPJ pelo algoritmo oficial de dígitos verificadores
+// (não só o formato/tamanho — CNPJs com dígitos errados são rejeitados aqui).
+function validarCNPJ(cnpjBruto) {
+    const cnpj = String(cnpjBruto).replace(/[^\d]+/g, '');
+
+    if (cnpj.length !== 14) return false;
+    if (/^(\d)\1{13}$/.test(cnpj)) return false; // ex: 00000000000000
+
+    const calcularDigito = (base) => {
+        let soma = 0;
+        let pos = base.length - 7;
+
+        for (let i = base.length; i >= 1; i--) {
+            soma += Number(base.charAt(base.length - i)) * pos--;
+            if (pos < 2) pos = 9;
+        }
+
+        const resto = soma % 11;
+        return resto < 2 ? 0 : 11 - resto;
+    };
+
+    const digito1 = calcularDigito(cnpj.substring(0, 12));
+    if (digito1 !== Number(cnpj.charAt(12))) return false;
+
+    const digito2 = calcularDigito(cnpj.substring(0, 13));
+    if (digito2 !== Number(cnpj.charAt(13))) return false;
+
+    return true;
+}
+
+// Mesmo regex usado no cadastro de usuário (rota /api/auth/cadastro no backend),
+// pra manter a mesma definição de "telefone válido" em todo o sistema.
+const TELEFONE_REGEX = /^\s*(\d{2})?[-. ]?(\d{4,5})[-. ]?(\d{4})\s*$/;
+
+function validarTelefone(telefone) {
+    return TELEFONE_REGEX.test(telefone);
+}
+
+// Formata o telefone vindo da BrasilAPI (ex: "11987654321") como "(11) 98765-4321",
+// já deixando num formato reconhecível pelo TELEFONE_REGEX acima.
+function formatarTelefoneCnpj(telefoneBruto) {
+    const digitos = String(telefoneBruto || "").replace(/\D+/g, "");
+    if (!digitos) return "";
+
+    const ddd = digitos.slice(0, 2);
+    const numero = digitos.slice(2);
+
+    if (!ddd || !numero) return digitos;
+
+    if (numero.length === 5) {
+        return `(${ddd}) ${numero.slice(0, 5)}-${numero.slice(5)}`;
+    }
+
+    if (numero.length === 4) {
+        return `(${ddd}) ${numero.slice(0, 4)}-${numero.slice(4)}`;
+    }
+
+    return `(${ddd}) ${numero}`;
+}
+
+async function buscarDadosCnpj() {
+    const cnpjLimpo = inputCnpj.value.replace(/[^\d]+/g, '');
+
+    if (!validarCNPJ(cnpjLimpo)) {
+        alert("CNPJ inválido. Confira os números digitados.");
+        inputCnpj.focus();
+        return;
+    }
+
+    const textoOriginalBotao = btnBuscarCnpj.textContent;
+    btnBuscarCnpj.disabled = true;
+    btnBuscarCnpj.textContent = "⏳";
+
+    try {
+        const resposta = await fetch(`https://brasilapi.com.br/api/cnpj/v1/${cnpjLimpo}`);
+
+        if (resposta.status === 404) {
+            alert("CNPJ não encontrado na Receita Federal.");
+            return;
+        }
+
+        if (!resposta.ok) {
+            throw new Error(`Erro ${resposta.status} ao consultar o CNPJ.`);
+        }
+
+        const dados = await resposta.json();
+        preencherFormularioComCnpj(dados);
+
+    } catch (erro) {
+        console.error(erro);
+        alert("Não foi possível buscar os dados desse CNPJ agora. Tente novamente em instantes.");
+    } finally {
+        btnBuscarCnpj.disabled = false;
+        btnBuscarCnpj.textContent = textoOriginalBotao;
+    }
+}
+
+// Preenche o formulário de cliente com os dados retornados pela BrasilAPI.
+// Todos os campos continuam editáveis normalmente depois de preenchidos.
+function preencherFormularioComCnpj(dados) {
+    const campoCliente = formNovoCliente.querySelector("#cliente");
+    const campoEmail = formNovoCliente.querySelector("[name='email']");
+    const campoTelefone = formNovoCliente.querySelector("#telefone");
+    const campoEndereco = formNovoCliente.querySelector("#endereco");
+    const campoComplemento = formNovoCliente.querySelector("#complemento");
+    const campoBairro = formNovoCliente.querySelector("#bairro");
+
+    if (campoCliente) {
+        campoCliente.value = dados.nome_fantasia || dados.razao_social || campoCliente.value;
+    }
+
+    const emailCnpj = (dados.email || "").trim();
+    if (campoEmail && emailCnpj) {
+        campoEmail.value = emailCnpj;
+    } else if (!emailCnpj) {
+        // A Receita Federal só tem e-mail quando a empresa optou por informar —
+        // boa parte dos CNPJs simplesmente não tem esse dado, então não é um bug
+        // se esse campo às vezes ficar em branco.
+        console.info("BrasilAPI não retornou e-mail para este CNPJ.");
+    }
+
+    if (campoTelefone) {
+        const telefoneFormatado = formatarTelefoneCnpj(dados.ddd_telefone_1);
+        if (telefoneFormatado) {
+            campoTelefone.value = telefoneFormatado;
+        }
+    }
+
+    if (campoEndereco) {
+        const tipoLogradouro = dados.descricao_tipo_de_logradouro || "";
+        const partesEndereco = [
+            [tipoLogradouro, dados.logradouro].filter(Boolean).join(" "),
+            dados.numero
+        ].filter(Boolean);
+
+        if (partesEndereco.length) {
+            campoEndereco.value = partesEndereco.join(", ");
+        }
+    }
+
+    if (campoComplemento && dados.complemento) {
+        campoComplemento.value = dados.complemento;
+    }
+
+    if (campoBairro && dados.bairro) {
+        campoBairro.value = dados.bairro;
+    }
 }
 
 document.addEventListener("DOMContentLoaded", async () => {
@@ -166,7 +322,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     if (btnSair) {
         btnSair.addEventListener("click", (e) => {
             e.preventDefault();
-            
+
         })
     }
 
@@ -191,6 +347,10 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     if (btnFecharModal) {
         btnFecharModal.addEventListener("click", fecharModal);
+    }
+
+    if (btnBuscarCnpj) {
+        btnBuscarCnpj.addEventListener("click", buscarDadosCnpj);
     }
 
     // Fechar modal nota
@@ -220,12 +380,25 @@ document.addEventListener("DOMContentLoaded", async () => {
         formNovoCliente.addEventListener("submit", async (e) => {
             e.preventDefault();
 
+            const telefoneDigitado = formNovoCliente.querySelector("#telefone")?.value.trim();
+
+            if (telefoneDigitado && !validarTelefone(telefoneDigitado)) {
+                alert("Telefone inválido. Confira o número digitado.");
+                formNovoCliente.querySelector("#telefone")?.focus();
+                return;
+            }
+
             btnSubmitCliente.disabled = true;
             btnSubmitCliente.innerText = "Enviando...";
 
             try {
                 const formData = new FormData(formNovoCliente);
                 const dados = Object.fromEntries(formData);
+
+                // Mesma normalização usada no cadastro de usuário: só dígitos.
+                if (dados.telefone) {
+                    dados.telefone = dados.telefone.replace(/\D+/g, "");
+                }
 
                 const resposta = await fetchAutenticado("https://sos-alimentos-servidor.onrender.com/api/clientes", {
                     method: "POST",
@@ -500,13 +673,15 @@ document.addEventListener("DOMContentLoaded", async () => {
         const quantidadeNotas = {};
 
         notas.forEach(nota => {
-            const id = String(nota.idCliente || nota.clienteId || nota.cliente);
+            // Mesmo critério usado em carregarNotasDoCliente: casa por nome do
+            // cliente, não por idCliente. Algumas notas (em geral as mais antigas,
+            // que coincidem com as que já estão em grupo) não têm idCliente
+            // preenchido de forma confiável, então contar por id fazia elas
+            // sumirem da contagem até a aba do cliente ser aberta.
+            const chave = (nota.cliente || "").toLowerCase().trim();
+            if (!chave) return;
 
-            if (!quantidadeNotas[id]) {
-                quantidadeNotas[id] = 0;
-            }
-
-            quantidadeNotas[id]++;
+            quantidadeNotas[chave] = (quantidadeNotas[chave] || 0) + 1;
         });
 
         notasConteudo.innerHTML = "<p style='color:#9ca3af; padding:20px;'>Selecione um cliente para ver as notas.</p>";
@@ -521,7 +696,8 @@ document.addEventListener("DOMContentLoaded", async () => {
 
 
         clientesOrdenados.forEach(cliente => {
-            cliente.quantidadeNotas = quantidadeNotas[String(cliente._id)] || 0;
+            const chave = cliente.cliente.toLowerCase().trim();
+            cliente.quantidadeNotas = quantidadeNotas[chave] || 0;
         });
 
         const gruposAlfabeticos = {};
