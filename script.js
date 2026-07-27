@@ -12,6 +12,7 @@ const modalContainer = document.getElementById("modal-container");
 
 const formNovoCliente = document.getElementById("formNovoCliente");
 const btnSubmitCliente = document.getElementById("btnSubmitCliente");
+const btnCancelarEdicaoCliente = document.getElementById("btnCancelarEdicaoCliente");
 const btnSubmitNota = document.getElementById("btnSubmitNota")
 const btnFecharModal = document.getElementById("btn-fechar-modal");
 
@@ -33,6 +34,11 @@ const listaClientes = document.getElementById("listaClientes");
 
 let todosClientes = [];
 let contadorNotasPorCliente = new Map(); // clienteId -> elemento <span> da contagem na aba Notas
+
+// MODAL DE CLIENTE: reaproveitado tanto pra criar quanto pra visualizar/editar
+let estadoModalCliente = "criar"; // "criar" | "visualizar" | "editando"
+let clienteEmEdicao = null; // dados do cliente carregado no modal (null quando "criar")
+let valoresOriginaisCliente = null; // snapshot dos campos ao entrar em "editando", pra detectar mudança real
 
 // AGRUPAMENTO / SELEÇÃO DE NOTAS
 // (declarado uma única vez, fora de carregarNotasDoCliente)
@@ -200,6 +206,7 @@ async function buscarDadosCnpj() {
 
         const dados = await resposta.json();
         preencherFormularioComCnpj(dados);
+        verificarAlteracoesCliente(); // .value programático não dispara "input" sozinho
 
     } catch (erro) {
         console.error(erro);
@@ -260,6 +267,103 @@ function preencherFormularioComCnpj(dados) {
     if (campoBairro && dados.bairro) {
         campoBairro.value = dados.bairro;
     }
+}
+
+// ==================== MODO VISUALIZAR/EDITAR CLIENTE ====================
+
+// Campos do form de cliente que participam da edição (fora o CNPJ, que também
+// entra aqui pois pode ser alterado manualmente mesmo depois de buscado).
+function camposClienteEditaveis() {
+    return [
+        formNovoCliente.querySelector("#cliente"),
+        formNovoCliente.querySelector("[name='email']"),
+        formNovoCliente.querySelector("#cnpj"),
+        formNovoCliente.querySelector("#telefone"),
+        formNovoCliente.querySelector("#endereco"),
+        formNovoCliente.querySelector("#complemento"),
+        formNovoCliente.querySelector("#bairro"),
+    ].filter(Boolean);
+}
+
+// Espaços no início/fim não contam como alteração real — por isso o trim().
+function capturarValoresAtuaisCliente() {
+    const valores = {};
+    camposClienteEditaveis().forEach(campo => {
+        valores[campo.name] = campo.value.trim();
+    });
+    return valores;
+}
+
+function houveAlteracaoPendenteCliente() {
+    if (estadoModalCliente !== "editando" || !valoresOriginaisCliente) return false;
+
+    const atuais = capturarValoresAtuaisCliente();
+    return Object.keys(atuais).some(
+        chave => atuais[chave] !== (valoresOriginaisCliente[chave] || "")
+    );
+}
+
+function verificarAlteracoesCliente() {
+    if (estadoModalCliente !== "editando") return;
+    btnSubmitCliente.disabled = !houveAlteracaoPendenteCliente();
+}
+
+// Aplica visualmente o estado atual (título, textos dos botões, campos
+// travados/liberados) — chamada sempre que estadoModalCliente muda.
+function aplicarEstadoModalCliente() {
+    const tituloEl = document.getElementById("tituloModalCliente");
+    const bloquearCampos = estadoModalCliente === "visualizar";
+
+    camposClienteEditaveis().forEach(campo => {
+        campo.disabled = bloquearCampos;
+    });
+    if (btnBuscarCnpj) btnBuscarCnpj.disabled = bloquearCampos;
+
+    btnSubmitCliente.classList.remove("sem-alteracoes");
+
+    if (estadoModalCliente === "criar") {
+        if (tituloEl) tituloEl.innerHTML = `Registrar Novo Cliente <span>SOS</span>`;
+        btnSubmitCliente.textContent = "ENVIAR";
+        btnSubmitCliente.disabled = false;
+        btnCancelarEdicaoCliente.hidden = true;
+
+    } else if (estadoModalCliente === "visualizar") {
+        if (tituloEl) tituloEl.innerHTML = `Detalhes do Cliente <span>SOS</span>`;
+        btnSubmitCliente.textContent = "Editar";
+        btnSubmitCliente.disabled = false;
+        btnCancelarEdicaoCliente.hidden = true;
+
+    } else if (estadoModalCliente === "editando") {
+        if (tituloEl) tituloEl.innerHTML = `Editar Cliente <span>SOS</span>`;
+        btnSubmitCliente.textContent = "Salvar";
+        btnSubmitCliente.classList.add("sem-alteracoes");
+        btnSubmitCliente.disabled = true; // só libera quando algo realmente mudar
+        btnCancelarEdicaoCliente.hidden = false;
+    }
+}
+
+// Abre o modal já preenchido com os dados do cliente, em modo de visualização
+// (campos travados) — chamado pelo botão "Editar" do card do cliente.
+function abrirModalClienteParaEdicao(cliente) {
+    clienteEmEdicao = cliente;
+    estadoModalCliente = "visualizar";
+    valoresOriginaisCliente = null;
+
+    formNovoCliente.reset();
+    formNovoCliente.querySelector("#cliente").value = cliente.cliente || "";
+    formNovoCliente.querySelector("[name='email']").value = cliente.email || "";
+    formNovoCliente.querySelector("#cnpj").value = cliente.cnpj || "";
+    if (formNovoCliente.querySelector("#telefone")) {
+        formNovoCliente.querySelector("#telefone").value = cliente.telefone || "";
+    }
+    formNovoCliente.querySelector("#endereco").value = cliente.endereco || "";
+    formNovoCliente.querySelector("#complemento").value = cliente.complemento || "";
+    formNovoCliente.querySelector("#bairro").value = cliente.bairro || "";
+
+    aplicarEstadoModalCliente();
+
+    modalContainer.style.display = "flex";
+    document.body.style.overflow = "hidden";
 }
 
 document.addEventListener("DOMContentLoaded", async () => {
@@ -326,19 +430,37 @@ document.addEventListener("DOMContentLoaded", async () => {
         })
     }
 
-    // Abrir modal Cliente
+    // Abrir modal Cliente (sempre em modo de criação)
     if (btnAbrirModal) {
         btnAbrirModal.addEventListener("click", (e) => {
             e.preventDefault();
+
+            estadoModalCliente = "criar";
+            clienteEmEdicao = null;
+            valoresOriginaisCliente = null;
+
+            formNovoCliente.reset();
+            aplicarEstadoModalCliente();
+
             modalContainer.style.display = "flex";
             document.body.style.overflow = "hidden";
         });
     }
 
-    // Fechar modal Cliente
+    // Fechar modal Cliente — se houver alteração pendente no modo de edição,
+    // confirma antes de descartar (clique fora, X, ou ESC eventualmente).
     function fecharModal() {
+        if (houveAlteracaoPendenteCliente()) {
+            const confirmarSaida = confirm("Você tem alterações não salvas. Deseja sair sem salvar?");
+            if (!confirmarSaida) return; // usuário desistiu de fechar, mantém o modal aberto
+        }
+
         modalContainer.style.display = "none";
         document.body.style.overflow = "";
+
+        estadoModalCliente = "criar";
+        clienteEmEdicao = null;
+        valoresOriginaisCliente = null;
 
         if (formNovoCliente) {
             formNovoCliente.reset();
@@ -351,6 +473,34 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     if (btnBuscarCnpj) {
         btnBuscarCnpj.addEventListener("click", buscarDadosCnpj);
+    }
+
+    // "Cancelar" edição: descarta as mudanças e volta pro modo de visualização
+    // com os valores originais do cliente, sem fechar o modal.
+    if (btnCancelarEdicaoCliente) {
+        btnCancelarEdicaoCliente.addEventListener("click", () => {
+            if (!clienteEmEdicao) return;
+
+            estadoModalCliente = "visualizar";
+            formNovoCliente.querySelector("#cliente").value = clienteEmEdicao.cliente || "";
+            formNovoCliente.querySelector("[name='email']").value = clienteEmEdicao.email || "";
+            formNovoCliente.querySelector("#cnpj").value = clienteEmEdicao.cnpj || "";
+            if (formNovoCliente.querySelector("#telefone")) {
+                formNovoCliente.querySelector("#telefone").value = clienteEmEdicao.telefone || "";
+            }
+            formNovoCliente.querySelector("#endereco").value = clienteEmEdicao.endereco || "";
+            formNovoCliente.querySelector("#complemento").value = clienteEmEdicao.complemento || "";
+            formNovoCliente.querySelector("#bairro").value = clienteEmEdicao.bairro || "";
+
+            valoresOriginaisCliente = null;
+            aplicarEstadoModalCliente();
+        });
+    }
+
+    // Reavalia se há alteração real (ignorando espaços extras) a cada
+    // digitação, só importa enquanto estiver no modo de edição.
+    if (formNovoCliente) {
+        formNovoCliente.addEventListener("input", verificarAlteracoesCliente);
     }
 
     // Fechar modal nota
@@ -380,6 +530,16 @@ document.addEventListener("DOMContentLoaded", async () => {
         formNovoCliente.addEventListener("submit", async (e) => {
             e.preventDefault();
 
+            // No modo de visualização, o botão "Editar" só destrava os campos —
+            // não envia nada ainda.
+            if (estadoModalCliente === "visualizar") {
+                valoresOriginaisCliente = capturarValoresAtuaisCliente();
+                estadoModalCliente = "editando";
+                aplicarEstadoModalCliente();
+                formNovoCliente.querySelector("#cliente")?.focus();
+                return;
+            }
+
             const telefoneDigitado = formNovoCliente.querySelector("#telefone")?.value.trim();
 
             if (telefoneDigitado && !validarTelefone(telefoneDigitado)) {
@@ -388,8 +548,10 @@ document.addEventListener("DOMContentLoaded", async () => {
                 return;
             }
 
+            const editando = estadoModalCliente === "editando";
+
             btnSubmitCliente.disabled = true;
-            btnSubmitCliente.innerText = "Enviando...";
+            btnSubmitCliente.innerText = editando ? "Salvando..." : "Enviando...";
 
             try {
                 const formData = new FormData(formNovoCliente);
@@ -400,8 +562,12 @@ document.addEventListener("DOMContentLoaded", async () => {
                     dados.telefone = dados.telefone.replace(/\D+/g, "");
                 }
 
-                const resposta = await fetchAutenticado("https://sos-alimentos-servidor.onrender.com/api/clientes", {
-                    method: "POST",
+                const url = editando
+                    ? `https://sos-alimentos-servidor.onrender.com/api/clientes/${clienteEmEdicao._id}`
+                    : "https://sos-alimentos-servidor.onrender.com/api/clientes";
+
+                const resposta = await fetchAutenticado(url, {
+                    method: editando ? "PUT" : "POST",
                     headers: {
                         "Content-Type": "application/json"
                     },
@@ -412,11 +578,18 @@ document.addEventListener("DOMContentLoaded", async () => {
                 const respostaData = await resposta.json();
 
                 if (resposta.ok) {
-                    alert("Cliente cadastrado com sucesso!");
+                    alert(editando ? "Cliente atualizado com sucesso!" : "Cliente cadastrado com sucesso!");
+
+                    // Já foi salvo — zera o estado antes de fechar pra fecharModal()
+                    // não perguntar "sair sem salvar?" à toa.
+                    estadoModalCliente = "criar";
+                    clienteEmEdicao = null;
+                    valoresOriginaisCliente = null;
+
                     fecharModal();
                     carregarClientes();
                 } else {
-                    alert(respostaData.erro || "Erro ao cadastrar.");
+                    alert(respostaData.erro || (editando ? "Erro ao atualizar cliente." : "Erro ao cadastrar."));
                 }
             } catch (erro) {
                 console.error(erro);
@@ -424,7 +597,7 @@ document.addEventListener("DOMContentLoaded", async () => {
             }
 
             btnSubmitCliente.disabled = false;
-            btnSubmitCliente.innerText = "Cadastrar";
+            btnSubmitCliente.innerText = editando ? "Salvar" : "Cadastrar";
         });
     }
 
@@ -652,6 +825,10 @@ document.addEventListener("DOMContentLoaded", async () => {
                 </div>
             `;
             clientesConteudo.appendChild(cardCliente);
+
+            cardCliente.querySelector(".btn-editar").addEventListener("click", () => {
+                abrirModalClienteParaEdicao(c);
+            });
         });
 
         renderAbasNotas();

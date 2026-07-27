@@ -582,6 +582,40 @@ input[type="file"] {
     cursor: wait;
 }
 
+/* Desabilitado por falta de alteração (modo de edição de cliente) — não é um
+   carregamento, então usa "não permitido" em vez do cursor de "espera". */
+#btnSubmitCliente.sem-alteracoes:disabled {
+    cursor: not-allowed;
+}
+
+.acoes-form-cliente {
+    display: flex;
+    gap: 10px;
+}
+
+.acoes-form-cliente #btnSubmitCliente {
+    flex: 1;
+}
+
+.button-secundario {
+    margin-top: 10px;
+    flex: 1;
+    font-weight: 600;
+    font-size: 15px;
+    padding: 13px 18px;
+    border: 1.5px solid var(--papel-sombra);
+    border-radius: 4px;
+    background: var(--branco);
+    color: var(--tinta-suave);
+    transition: border-color 0.15s ease, color 0.15s ease, background 0.15s ease;
+}
+
+.button-secundario:hover {
+    border-color: var(--tomate);
+    color: var(--tomate);
+    background: rgba(193, 68, 46, 0.06);
+}
+
 /* ---------- Autocomplete (cliente da nota) ---------- */
 
 .autocomplete {
