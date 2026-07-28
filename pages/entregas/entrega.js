@@ -5,7 +5,6 @@ const inputCliente = document.getElementById("cliente");
 const inputValor = document.getElementById("valorNota");
 const inputImagem = document.getElementById("imagemNota");
 const nomeArquivo = document.getElementById("nomeArquivo");
-const btnSubmitNota = document.getElementById("btnEnviar")
 
 inputImagem.addEventListener("change", () => {
     nomeArquivo.textContent = inputImagem.files.length
@@ -117,13 +116,13 @@ document.addEventListener("click", (e) => {
 
 async function selecionarCliente(cliente) {
     clienteSelecionado = cliente;
-    await buscarNumeroNota(cliente._id);
+    await buscarNumeroNota(cliente);
 }
 
 // =========================
 // Buscar próximo número da nota
 // =========================
-async function buscarNumeroNota(idCliente) {
+async function buscarNumeroNota(cliente) {
     try {
         const resposta = await fetch(`${API_URL}/notas?_=${Date.now()}`, {
             credentials: "include"
@@ -135,8 +134,12 @@ async function buscarNumeroNota(idCliente) {
 
         const notas = await resposta.json();
 
+        // Mesmo critério usado no painel admin: casa por nome do cliente, não
+        // por idCliente — várias notas no banco têm idCliente vazio/inconsistente,
+        // o que fazia a contagem vir errada e toda nota nova sair como "1".
+        const chaveAlvo = cliente.cliente.toLowerCase().trim();
         const notasCliente = notas.filter(n =>
-            String(n.idCliente) === String(idCliente)
+            (n.cliente || "").toLowerCase().trim() === chaveAlvo
         );
 
         numeroNota = notasCliente.length + 1;
@@ -152,10 +155,6 @@ async function buscarNumeroNota(idCliente) {
 // =========================
 formEntrega.addEventListener("submit", async (e) => {
     e.preventDefault();
-
-    btnSubmitNota.disabled = true;
-    btnSubmitNota.innerText = "Enviando...";
-
 
     if (!clienteSelecionado) {
         alert("Selecione um cliente válido.");
@@ -197,9 +196,6 @@ formEntrega.addEventListener("submit", async (e) => {
         nomeArquivo.textContent = "Nenhum arquivo selecionado";
         clienteSelecionado = null;
         numeroNota = 1;
-
-        btnSubmitNota.disabled = false;
-        btnSubmitNota.innerText = "Enviar"
 
     } catch (erro) {
         console.error(erro);

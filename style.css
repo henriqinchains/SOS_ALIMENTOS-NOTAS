@@ -1110,6 +1110,80 @@ input[type="file"] {
 }
 
 /* ============================================================
+   FATURAMENTO
+   ============================================================ */
+
+.faturamento-toolbar .faturamento-presets,
+.faturamento-toolbar .faturamento-periodo {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.faturamento-toolbar .faturamento-presets button {
+    font-family: var(--fonte-texto);
+    font-size: 13px;
+    padding: 8px 12px;
+    border-radius: var(--raio);
+    border: 1.5px solid var(--papel-sombra);
+    background: var(--branco);
+    color: var(--tinta-suave);
+    cursor: pointer;
+    transition: border-color 0.15s ease, color 0.15s ease, background 0.15s ease;
+}
+
+.faturamento-toolbar .faturamento-presets button:hover {
+    border-color: var(--folha);
+    color: var(--folha);
+    background: var(--folha-clara);
+}
+
+.faturamento-toolbar .faturamento-periodo label {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-family: var(--fonte-utilitaria);
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: var(--tinta-muted);
+}
+
+.faturamento-toolbar .faturamento-periodo input[type="date"] {
+    font-family: var(--fonte-texto);
+    font-size: 13.5px;
+    padding: 8px 10px;
+    border-radius: var(--raio);
+    border: 1.5px solid var(--papel-sombra);
+    background: var(--branco);
+    color: var(--tinta);
+}
+
+.btn-exportar {
+    font-family: var(--fonte-texto);
+    font-weight: 600;
+    font-size: 13px;
+    padding: 8px 14px;
+    border-radius: var(--raio);
+    border: none;
+    background: var(--dourado);
+    color: #241605;
+    cursor: pointer;
+    transition: background 0.15s ease;
+    white-space: nowrap;
+}
+
+.btn-exportar:hover {
+    background: var(--dourado-escuro);
+    color: var(--papel);
+}
+
+.faturamento-resumo {
+    margin-bottom: 24px;
+}
+
+/* ============================================================
    LIXEIRA
    ============================================================ */
 

@@ -152,7 +152,7 @@ function initCadastro() {
                 formCadastro.reset();
 
                 window.setTimeout(() => {
-                    window.location.href = "../../";
+                    window.location.href = "../entregas/entrega.html";
                 }, 2000);
             } else {
                 message.textContent = `❌ ${dados.erro || "Erro ao cadastrar."}`;

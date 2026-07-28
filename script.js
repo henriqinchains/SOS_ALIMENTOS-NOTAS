@@ -35,6 +35,11 @@ const listaClientes = document.getElementById("listaClientes");
 let todosClientes = [];
 let contadorNotasPorCliente = new Map(); // clienteId -> elemento <span> da contagem na aba Notas
 
+// FATURAMENTO: filtro de período (default = dia atual, conforme pedido)
+let notasFaturamentoCache = [];
+let filtroFaturamentoInicio = null; // "YYYY-MM-DD"
+let filtroFaturamentoFim = null;    // "YYYY-MM-DD"
+
 // MODAL DE CLIENTE: reaproveitado tanto pra criar quanto pra visualizar/editar
 let estadoModalCliente = "criar"; // "criar" | "visualizar" | "editando"
 let clienteEmEdicao = null; // dados do cliente carregado no modal (null quando "criar")
@@ -420,13 +425,17 @@ document.addEventListener("DOMContentLoaded", async () => {
             if (page === "lixeira") {
                 renderLixeira();
             }
+
+            if (page === "faturamento") {
+                renderFaturamento();
+            }
         });
     });
 
     if (btnSair) {
         btnSair.addEventListener("click", (e) => {
             e.preventDefault();
-
+            
         })
     }
 
@@ -694,7 +703,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         }
 
         inputIdCliente.value = cliente._id;
-        await buscarNumeroNota(cliente._id);
+        await buscarNumeroNota(cliente);
     }
 
     function mostrarSugestoes(texto) {
@@ -738,13 +747,17 @@ document.addEventListener("DOMContentLoaded", async () => {
         }
     });
 
-    async function buscarNumeroNota(idCliente) {
+    async function buscarNumeroNota(cliente) {
         try {
             const resposta = await fetchAutenticado(`https://sos-alimentos-servidor.onrender.com/api/notas?_=${Date.now()}`, { credentials: "include" });
             const notas = await resposta.json();
 
-            // Tratamento rígido garantindo que compare strings
-            const notasCliente = notas.filter(n => String(n.idCliente) === String(idCliente));
+            // Mesmo critério usado em carregarNotasDoCliente/renderAbasNotas:
+            // casa por nome do cliente, não por idCliente — várias notas no
+            // banco têm idCliente vazio/inconsistente, o que fazia a contagem
+            // vir menor que a real e todo nota nova sair numerada como "1".
+            const chaveAlvo = cliente.cliente.toLowerCase().trim();
+            const notasCliente = notas.filter(n => (n.cliente || "").toLowerCase().trim() === chaveAlvo);
             inputNumeroNota.value = notasCliente.length + 1;
         } catch (erro) {
             console.error(erro);
@@ -1092,6 +1105,428 @@ document.addEventListener("DOMContentLoaded", async () => {
         return card;
     }
 
+    // ==========================================
+    // SEÇÃO DE FATURAMENTO (valor de notas por período)
+    // ==========================================
+
+    // Formata uma data LOCAL (do navegador) como "YYYY-MM-DD" pro valor
+    // default dos inputs type="date". Evita toISOString(), que converte pra
+    // UTC e pode "voltar" a data um dia dependendo do horário/fuso.
+    function obterDataLocalISO(data) {
+        const ano = data.getFullYear();
+        const mes = String(data.getMonth() + 1).padStart(2, "0");
+        const dia = String(data.getDate()).padStart(2, "0");
+        return `${ano}-${mes}-${dia}`;
+    }
+
+    async function renderFaturamento() {
+        const faturamentoConteudo = document.getElementById("faturamentoConteudo");
+        const faturamentoToolbar = document.getElementById("faturamentoToolbar");
+        if (!faturamentoConteudo) return;
+
+        // Default pedido: dia atual. Só define na primeira vez que a aba é
+        // aberta — trocas de data feitas pelo usuário depois disso persistem
+        // enquanto ele navega entre as abas.
+        if (!filtroFaturamentoInicio || !filtroFaturamentoFim) {
+            const hojeISO = obterDataLocalISO(new Date());
+            filtroFaturamentoInicio = hojeISO;
+            filtroFaturamentoFim = hojeISO;
+        }
+
+        faturamentoConteudo.innerHTML = "<p style='color:#9ca3af; padding:20px;'>Carregando...</p>";
+        if (faturamentoToolbar) faturamentoToolbar.innerHTML = "";
+
+        try {
+            const resposta = await fetchAutenticado(`https://sos-alimentos-servidor.onrender.com/api/notas?_=${Date.now()}`, { credentials: "include" });
+            notasFaturamentoCache = await resposta.json();
+
+            if (faturamentoToolbar) montarToolbarFaturamento(faturamentoToolbar);
+            montarResumoEListaFaturamento(faturamentoConteudo);
+
+        } catch (erro) {
+            console.error(erro);
+            faturamentoConteudo.innerHTML = "<p class='erro-txt'>Erro ao carregar o faturamento.</p>";
+        }
+    }
+
+    function montarToolbarFaturamento(container) {
+        container.innerHTML = "";
+
+        const toolbar = document.createElement("div");
+        toolbar.classList.add("clientes-toolbar", "faturamento-toolbar");
+        toolbar.innerHTML = `
+            <h2 style="color: white; font-size: 20px; padding: 10px 0;">Faturamento</h2>
+
+            <div class="faturamento-presets">
+                <button type="button" data-preset="hoje">Hoje</button>
+                <button type="button" data-preset="ontem">Ontem</button>
+                <button type="button" data-preset="semana">Últimos 7 dias</button>
+                <button type="button" data-preset="mes">Este mês</button>
+            </div>
+
+            <div class="faturamento-periodo">
+                <label>De <input type="date" id="faturamentoDataInicio" value="${filtroFaturamentoInicio}"></label>
+                <label>Até <input type="date" id="faturamentoDataFim" value="${filtroFaturamentoFim}"></label>
+                <button type="button" id="btnExportarFaturamento" class="btn-exportar" title="Exportar como notinha">🧾 Exportar</button>
+            </div>
+        `;
+        container.appendChild(toolbar);
+
+        toolbar.querySelector("#btnExportarFaturamento").addEventListener("click", exportarFaturamentoComoNotinha);
+
+        const inputInicio = toolbar.querySelector("#faturamentoDataInicio");
+        const inputFim = toolbar.querySelector("#faturamentoDataFim");
+
+        inputInicio.addEventListener("change", () => {
+            filtroFaturamentoInicio = inputInicio.value;
+            if (filtroFaturamentoInicio > filtroFaturamentoFim) {
+                filtroFaturamentoFim = filtroFaturamentoInicio;
+                inputFim.value = filtroFaturamentoFim;
+            }
+            montarResumoEListaFaturamento(document.getElementById("faturamentoConteudo"));
+        });
+
+        inputFim.addEventListener("change", () => {
+            filtroFaturamentoFim = inputFim.value;
+            if (filtroFaturamentoFim < filtroFaturamentoInicio) {
+                filtroFaturamentoInicio = filtroFaturamentoFim;
+                inputInicio.value = filtroFaturamentoInicio;
+            }
+            montarResumoEListaFaturamento(document.getElementById("faturamentoConteudo"));
+        });
+
+        toolbar.querySelectorAll("[data-preset]").forEach(botao => {
+            botao.addEventListener("click", () => {
+                aplicarPresetFaturamento(botao.dataset.preset);
+                inputInicio.value = filtroFaturamentoInicio;
+                inputFim.value = filtroFaturamentoFim;
+                montarResumoEListaFaturamento(document.getElementById("faturamentoConteudo"));
+            });
+        });
+    }
+
+    function aplicarPresetFaturamento(preset) {
+        const hoje = new Date();
+
+        if (preset === "hoje") {
+            const iso = obterDataLocalISO(hoje);
+            filtroFaturamentoInicio = iso;
+            filtroFaturamentoFim = iso;
+        }
+
+        if (preset === "ontem") {
+            const ontem = new Date(hoje);
+            ontem.setDate(ontem.getDate() - 1);
+            const iso = obterDataLocalISO(ontem);
+            filtroFaturamentoInicio = iso;
+            filtroFaturamentoFim = iso;
+        }
+
+        if (preset === "semana") {
+            const seteDiasAtras = new Date(hoje);
+            seteDiasAtras.setDate(seteDiasAtras.getDate() - 6); // hoje + 6 pra trás = 7 dias
+            filtroFaturamentoInicio = obterDataLocalISO(seteDiasAtras);
+            filtroFaturamentoFim = obterDataLocalISO(hoje);
+        }
+
+        if (preset === "mes") {
+            const primeiroDiaMes = new Date(hoje.getFullYear(), hoje.getMonth(), 1);
+            filtroFaturamentoInicio = obterDataLocalISO(primeiroDiaMes);
+            filtroFaturamentoFim = obterDataLocalISO(hoje);
+        }
+    }
+
+    // Mesmo critério usado no resto do app pra extrair a data de uma nota:
+    // compara a string "YYYY-MM-DD" direto de dataEmissao (sem passar por
+    // new Date()), pra não deixar o fuso horário empurrar a nota pro dia errado.
+    function filtrarNotasPorPeriodo(notas, inicio, fim) {
+        return notas.filter(n => {
+            if (!n.dataEmissao) return false;
+            const dataNota = n.dataEmissao.split("T")[0];
+            return dataNota >= inicio && dataNota <= fim;
+        });
+    }
+
+    function montarResumoEListaFaturamento(container) {
+        if (!container) return;
+        container.innerHTML = "";
+
+        const notasAtivas = notasFaturamentoCache.filter(n => !n.deletado);
+        const notasNoPeriodo = filtrarNotasPorPeriodo(notasAtivas, filtroFaturamentoInicio, filtroFaturamentoFim)
+            .sort((a, b) => (b.dataEmissao || "").localeCompare(a.dataEmissao || ""));
+
+        const formatarMoeda = (valor) => valor.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+
+        const total = notasNoPeriodo.reduce((soma, n) => soma + (parseFloat(n.valor) || 0), 0);
+        const totalPago = notasNoPeriodo.filter(n => n.pago).reduce((soma, n) => soma + (parseFloat(n.valor) || 0), 0);
+        const totalPendente = total - totalPago;
+
+        const resumo = document.createElement("div");
+        resumo.classList.add("info-boxes", "faturamento-resumo");
+        resumo.innerHTML = `
+            <div class="info-box">
+                <span>💰 Total no período</span>
+                <strong>${formatarMoeda(total)}</strong>
+            </div>
+            <div class="info-box">
+                <span>🧾 Notas no período</span>
+                <strong>${notasNoPeriodo.length}</strong>
+            </div>
+            <div class="info-box">
+                <span>✅ Recebido</span>
+                <strong>${formatarMoeda(totalPago)}</strong>
+            </div>
+            <div class="info-box">
+                <span>⏳ Pendente</span>
+                <strong>${formatarMoeda(totalPendente)}</strong>
+            </div>
+        `;
+        container.appendChild(resumo);
+
+        if (notasNoPeriodo.length === 0) {
+            const aviso = document.createElement("p");
+            aviso.classList.add("sem-notas-txt");
+            aviso.textContent = "Nenhuma nota registrada nesse período.";
+            container.appendChild(aviso);
+            return;
+        }
+
+        const grid = document.createElement("div");
+        grid.classList.add("sub-container-notas-listagem");
+
+        notasNoPeriodo.forEach(nota => {
+            grid.appendChild(criarCardNotaFaturamento(nota));
+        });
+
+        container.appendChild(grid);
+    }
+
+    // Card só-leitura (sem ações) reaproveitando o mesmo visual das outras
+    // listagens de nota do sistema.
+    function criarCardNotaFaturamento(nota) {
+        const card = document.createElement("div");
+        card.classList.add("cliente-card", "nota-fiscal-card-ajuste");
+        card.classList.toggle("nota-paga", nota.pago);
+
+        const valorFormatado = parseFloat(nota.valor || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+
+        let dataFormatada = 'Não informada';
+        if (nota.dataEmissao) {
+            const apenasData = nota.dataEmissao.split('T')[0];
+            const partes = apenasData.split('-');
+            if (partes.length === 3) {
+                dataFormatada = `${partes[2]}/${partes[1]}/${partes[0]}`;
+            }
+        }
+
+        card.innerHTML = `
+            <div class="cliente-topo">
+                <h3>${nota.cliente || "Cliente"} — Nota Nº ${nota.numeroNota || "-"}</h3>
+                <span class="nota-tag-valor">${valorFormatado}</span>
+            </div>
+            <p class="cliente-rua"><strong>Emissão:</strong> ${dataFormatada}</p>
+            <p class="cliente-bairro"><strong>Status:</strong> ${nota.pago ? "Pago" : "Pendente"}</p>
+            <p class="cliente-rua"><strong>Entrega:</strong> ${nota.entregador || 'Não informado'}</p>
+        `;
+
+        return card;
+    }
+
+    // Converte "YYYY-MM-DD" pra "DD/MM/YYYY", sem passar por new Date()
+    // (mesmo motivo de sempre: evitar que o fuso horário mude o dia).
+    function formatarDataBR(isoStr) {
+        const [ano, mes, dia] = isoStr.split("-");
+        return `${dia}/${mes}/${ano}`;
+    }
+
+    // Gera a "notinha" de faturamento do período atual (agrupado por cliente)
+    // numa aba nova, já pronta pra imprimir/salvar como PDF.
+    function exportarFaturamentoComoNotinha() {
+        const notasAtivas = notasFaturamentoCache.filter(n => !n.deletado);
+        const notasNoPeriodo = filtrarNotasPorPeriodo(notasAtivas, filtroFaturamentoInicio, filtroFaturamentoFim);
+
+        const formatarMoeda = (valor) => valor.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+
+        // Agrupa por nome de cliente (mesmo critério usado em todo o resto do
+        // faturamento — ver correção do número da nota nesta mesma conversa).
+        const porCliente = new Map(); // nome -> { total, quantidade }
+        notasNoPeriodo.forEach(nota => {
+            const nome = nota.cliente || "Cliente não identificado";
+            const atual = porCliente.get(nome) || { total: 0, quantidade: 0 };
+            atual.total += parseFloat(nota.valor) || 0;
+            atual.quantidade += 1;
+            porCliente.set(nome, atual);
+        });
+
+        const linhasClientes = [...porCliente.entries()].sort((a, b) => a[0].localeCompare(b[0]));
+        const totalGeral = notasNoPeriodo.reduce((soma, n) => soma + (parseFloat(n.valor) || 0), 0);
+
+        const periodoLabel = filtroFaturamentoInicio === filtroFaturamentoFim
+            ? formatarDataBR(filtroFaturamentoInicio)
+            : `${formatarDataBR(filtroFaturamentoInicio)} até ${formatarDataBR(filtroFaturamentoFim)}`;
+
+        const emitidoEm = new Date().toLocaleString('pt-BR');
+
+        const linhasHtml = linhasClientes.length
+            ? linhasClientes.map(([nome, dados]) => `
+                <div class="linha-cliente">
+                    <span class="nome">${nome}<span class="qtd">${dados.quantidade} nota${dados.quantidade > 1 ? "s" : ""}</span></span>
+                    <span class="valor">${formatarMoeda(dados.total)}</span>
+                </div>
+            `).join("")
+            : `<p class="vazio">Nenhuma nota registrada nesse período.</p>`;
+
+        const html = `<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<title>Notinha de Faturamento — ${periodoLabel}</title>
+<style>
+    @import url("https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,600;9..144,700&family=Work+Sans:wght@400;500;600&family=Space+Mono:wght@400;700&display=swap");
+
+    * { box-sizing: border-box; }
+
+    body {
+        margin: 0;
+        padding: 40px 16px;
+        background: #EDE3C8;
+        font-family: "Work Sans", sans-serif;
+        color: #20291F;
+        display: flex;
+        justify-content: center;
+    }
+
+    .notinha {
+        width: 100%;
+        max-width: 340px;
+        background: #FAF3E2;
+        padding: 28px 22px;
+        box-shadow: 0 12px 30px -10px rgba(6, 16, 10, 0.35);
+    }
+
+    .cabecalho {
+        text-align: center;
+        margin-bottom: 18px;
+    }
+
+    .cabecalho h1 {
+        font-family: "Fraunces", serif;
+        font-weight: 700;
+        font-size: 20px;
+        margin: 0 0 4px;
+    }
+
+    .cabecalho p {
+        font-family: "Space Mono", monospace;
+        font-size: 11px;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: #5C6B58;
+        margin: 2px 0;
+    }
+
+    .divisor {
+        border: none;
+        border-top: 2px dashed #C9BC98;
+        margin: 16px 0;
+    }
+
+    .linha-cliente {
+        display: flex;
+        justify-content: space-between;
+        align-items: baseline;
+        gap: 12px;
+        padding: 7px 0;
+        font-size: 13.5px;
+    }
+
+    .linha-cliente .nome {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+    }
+
+    .linha-cliente .qtd {
+        font-family: "Space Mono", monospace;
+        font-size: 10px;
+        text-transform: uppercase;
+        letter-spacing: 0.04em;
+        color: #948C77;
+        margin-top: 2px;
+    }
+
+    .linha-cliente .valor {
+        font-family: "Space Mono", monospace;
+        white-space: nowrap;
+    }
+
+    .vazio {
+        text-align: center;
+        font-size: 13px;
+        color: #948C77;
+        padding: 20px 0;
+    }
+
+    .total {
+        display: flex;
+        justify-content: space-between;
+        align-items: baseline;
+        font-family: "Fraunces", serif;
+        font-weight: 700;
+        font-size: 18px;
+        margin-top: 6px;
+    }
+
+    .rodape {
+        text-align: center;
+        margin-top: 20px;
+        font-family: "Space Mono", monospace;
+        font-size: 10px;
+        color: #948C77;
+    }
+
+    @media print {
+        body { background: #fff; padding: 0; }
+        .notinha { box-shadow: none; max-width: 100%; }
+        @page { margin: 16mm; }
+    }
+</style>
+</head>
+<body>
+    <div class="notinha">
+        <div class="cabecalho">
+            <h1>SOS Alimentos 🍎</h1>
+            <p>Faturamento por cliente</p>
+            <p>${periodoLabel}</p>
+        </div>
+
+        <hr class="divisor">
+
+        ${linhasHtml}
+
+        <hr class="divisor">
+
+        <div class="total">
+            <span>Total</span>
+            <span>${formatarMoeda(totalGeral)}</span>
+        </div>
+
+        <p class="rodape">Emitido em ${emitidoEm}<br>${notasNoPeriodo.length} nota${notasNoPeriodo.length !== 1 ? "s" : ""} · ${linhasClientes.length} cliente${linhasClientes.length !== 1 ? "s" : ""}</p>
+    </div>
+    <script>
+        window.onload = () => window.print();
+    </script>
+</body>
+</html>`;
+
+        const janela = window.open("", "_blank");
+        if (!janela) {
+            alert("O navegador bloqueou a abertura da notinha. Permita pop-ups para este site e tente novamente.");
+            return;
+        }
+        janela.document.write(html);
+        janela.document.close();
+    }
 
     // ==========================================
     // BARRA DE SELEÇÃO (modo agrupar)
