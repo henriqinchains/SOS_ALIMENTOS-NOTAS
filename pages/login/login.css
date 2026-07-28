@@ -24,6 +24,11 @@
 html,
 body {
     height: 100%;
+    width: 100%;
+    overflow: hidden;
+    position: fixed;
+    inset: 0;
+    overscroll-behavior: none;
 }
 
 body {
@@ -38,10 +43,17 @@ body {
 
 .page-shell {
     min-height: 100vh;
+    min-height: 100dvh;
+    height: 100%;
     display: flex;
     align-items: center;
     justify-content: center;
     padding: 32px 20px;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior: contain;
+    /* válvula de segurança: se o conteúdo não couber numa tela bem pequena,
+       rola só aqui dentro — a página em volta continua travada */
 }
 
 /* ---------- Cartão de login ---------- */
@@ -178,10 +190,10 @@ input:focus-visible {
 }
 
 input[type=number]::-webkit-inner-spin-button,
-    input[type=number]::-webkit-outer-spin-button {
-        -webkit-appearance: none;
-        margin: 0;
-    }
+input[type=number]::-webkit-outer-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+}
 
 
 button#login-button {

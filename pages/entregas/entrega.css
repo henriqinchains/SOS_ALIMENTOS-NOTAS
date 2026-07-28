@@ -24,7 +24,11 @@
 html,
 body {
     height: 100%;
+    width: 100%;
     overflow: hidden;
+    position: fixed;
+    inset: 0;
+    overscroll-behavior: none;
 }
 
 body {
@@ -94,6 +98,8 @@ body {
     min-height: 0;
     /* necessário pra flex:1 respeitar overflow-y do filho, em vez de esticar */
     overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior: contain;
     /* válvula de segurança: se o conteúdo não couber (tela bem pequena), rola
        só aqui dentro — a página em volta (html/body) continua parada */
     display: flex;

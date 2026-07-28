@@ -35,6 +35,11 @@
 html,
 body {
     height: 100%;
+    width: 100%;
+    overflow: hidden;
+    position: fixed;
+    inset: 0;
+    overscroll-behavior: none;
 }
 
 body {
@@ -180,8 +185,13 @@ img {
 main {
     margin-left: var(--sidebar-largura);
     flex: 1;
+    min-height: 0;
+    height: 100%;
     padding: 36px 44px 60px;
     min-width: 0;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior: contain;
 }
 
 section[hidden] {
