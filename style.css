@@ -1323,6 +1323,44 @@ input[type="file"] {
 }
 
 /* ============================================================
+   FEEDBACK INLINE (mensagens de status nos modais)
+   ============================================================ */
+
+.feedback {
+    margin-bottom: 16px;
+    font-size: 14px;
+    font-family: var(--fonte-texto);
+    padding: 10px 14px;
+    border-radius: var(--raio);
+    display: none;
+    /* invisível por padrão */
+}
+
+/* Sucesso (verde) */
+.feedback--sucesso {
+    display: block;
+    background: rgba(76, 122, 74, 0.15);
+    border: 1.5px solid var(--folha);
+    color: var(--folha);
+}
+
+/* Erro (vermelho) */
+.feedback--erro {
+    display: block;
+    background: rgba(193, 68, 46, 0.15);
+    border: 1.5px solid var(--tomate);
+    color: var(--tomate);
+}
+
+/* Informação/aviso (dourado) */
+.feedback--info {
+    display: block;
+    background: rgba(227, 162, 60, 0.15);
+    border: 1.5px solid var(--dourado);
+    color: var(--dourado-escuro);
+}
+
+/* ============================================================
    ACESSIBILIDADE / RESPONSIVO
    ============================================================ */
 

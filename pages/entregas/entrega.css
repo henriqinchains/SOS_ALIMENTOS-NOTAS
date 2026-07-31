@@ -372,6 +372,40 @@ button#btnEnviar:disabled {
     cursor: wait;
 }
 
+/* ---------- Feedback de envio ---------- */
+
+.feedback {
+    margin-bottom: 20px;
+    font-size: 14px;
+    font-family: var(--fonte-texto);
+    padding: 10px 14px;
+    border-radius: 3px;
+    display: none;
+    /* começa invisível */
+}
+
+.feedback--sucesso {
+    display: block;
+    background: rgba(76, 122, 74, 0.15);
+    border: 1.5px solid var(--folha);
+    color: var(--folha);
+}
+
+.feedback--erro {
+    display: block;
+    background: rgba(193, 68, 46, 0.15);
+    border: 1.5px solid var(--tomate);
+    color: var(--tomate);
+}
+
+.feedback--info {
+    display: block;
+    background: rgba(227, 162, 60, 0.15);
+    border: 1.5px solid var(--dourado);
+    color: var(--dourado-escuro);
+}
+
+
 @media (prefers-reduced-motion: reduce) {
     * {
         transition: none !important;

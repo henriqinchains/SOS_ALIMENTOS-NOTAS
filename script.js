@@ -71,6 +71,12 @@ const inputRazaoSocial = document.getElementById('razao_social');
 let loggedUser = sessionStorage.getItem("cache_usuario") || "";
 let userRole = sessionStorage.getItem("cache_cargo") || "user";
 
+function mostrarFeedbackNota(msg, tipo) {
+    const fb = document.getElementById("feedbackNota");
+    fb.textContent = msg;
+    fb.className = "feedback feedback--" + tipo;
+}
+
 
 async function verificarSessao() {
     try {
@@ -775,9 +781,8 @@ document.addEventListener("DOMContentLoaded", async () => {
             const formData = new FormData(formNota);
             const dados = Object.fromEntries(formData);
 
-            // CORREÇÃO 1: Evitar cadastro de notas "órfãs"
             if (!dados.idCliente) {
-                alert("⚠️ Por favor, selecione um cliente da lista sugerida para vincular a nota!");
+                mostrarFeedbackNota("⚠️ Por favor, selecione um cliente da lista sugerida para vincular a nota!", "erro");
                 inputClienteNota.focus();
                 return;
             }
@@ -786,7 +791,6 @@ document.addEventListener("DOMContentLoaded", async () => {
             btnSubmitNota.innerText = "Enviando...";
 
             try {
-
                 const resposta = await fetchAutenticado("https://sos-alimentos-servidor.onrender.com/api/notas", {
                     method: "POST",
                     credentials: "include",
@@ -796,24 +800,25 @@ document.addEventListener("DOMContentLoaded", async () => {
                 const respostaData = await resposta.json();
 
                 if (resposta.ok) {
-                    alert("Nota registrada com sucesso!");
+                    mostrarFeedbacNota("Nota registrada com sucesso!", "sucesso");
                     fecharModalNota();
 
                     // Atualiza a listagem dinamicamente
                     renderAbasNotas();
                 } else {
-                    alert(respostaData.error || "Erro ao cadastrar nota.");
+                    mostrarFeedbackNota(respostaData.error || "Erro ao cadastrar nota.", "erro");
                 }
 
             } catch (erro) {
                 console.error(erro);
-                alert("Erro ao conectar ao servidor.");
+                mostrarFeedbackNota("Erro ao conectar ao servidor.", "erro");
             }
 
             btnSubmitNota.disabled = false;
             btnSubmitNota.innerText = "Registrar Nota";
         });
     }
+
 
     // Carregar clientes pra exibição
     async function carregarClientes() {

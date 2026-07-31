@@ -5,23 +5,22 @@ const inputCliente = document.getElementById("cliente");
 const inputValor = document.getElementById("valorNota");
 const inputImagem = document.getElementById("imagemNota");
 const nomeArquivo = document.getElementById("nomeArquivo");
-
-inputImagem.addEventListener("change", () => {
-    nomeArquivo.textContent = inputImagem.files.length
-        ? inputImagem.files[0].name
-        : "Nenhum arquivo selecionado";
-});
 const listaClientes = document.getElementById("lista-clientes");
+const feedback = document.getElementById("feedback");
 
 let todosClientes = [];
 let clienteSelecionado = null;
 let numeroNota = 1;
 
+// Função para mostrar feedback inline
+function mostrarFeedback(mensagem, tipo) {
+    feedback.textContent = mensagem;
+    feedback.className = "feedback feedback--" + tipo;
+}
+
 // =========================
 // Sessão / controle de acesso
 // =========================
-// Esta página é exclusiva do entregador. Admin e financeiro não podem
-// acessá-la, e usuário sem sessão válida é mandado de volta pro login.
 async function verificarSessaoEntregador() {
     try {
         const resposta = await fetch(`${API_URL}/auth/me`, {
@@ -66,7 +65,7 @@ async function carregarClientes() {
 
     } catch (erro) {
         console.error(erro);
-        alert("Erro ao carregar clientes.");
+        mostrarFeedback("Erro ao carregar clientes.", "erro");
     }
 }
 
@@ -107,7 +106,6 @@ function mostrarSugestoes(texto) {
     });
 }
 
-// Fecha a lista ao clicar fora do campo de autocomplete
 document.addEventListener("click", (e) => {
     if (!e.target.closest(".autocomplete")) {
         listaClientes.innerHTML = "";
@@ -134,9 +132,6 @@ async function buscarNumeroNota(cliente) {
 
         const notas = await resposta.json();
 
-        // Mesmo critério usado no painel admin: casa por nome do cliente, não
-        // por idCliente — várias notas no banco têm idCliente vazio/inconsistente,
-        // o que fazia a contagem vir errada e toda nota nova sair como "1".
         const chaveAlvo = cliente.cliente.toLowerCase().trim();
         const notasCliente = notas.filter(n =>
             (n.cliente || "").toLowerCase().trim() === chaveAlvo
@@ -151,31 +146,33 @@ async function buscarNumeroNota(cliente) {
 }
 
 // =========================
-// Enviar nota
+// LocalStorage helpers
 // =========================
-formEntrega.addEventListener("submit", async (e) => {
-    e.preventDefault();
+function salvarNotaLocal(nota) {
+    let notas = JSON.parse(localStorage.getItem("notasPendentes")) || [];
+    notas.push(nota);
+    localStorage.setItem("notasPendentes", JSON.stringify(notas));
+}
 
-    if (!clienteSelecionado) {
-        alert("Selecione um cliente válido.");
-        return;
-    }
+function atualizarStatusNota(idLocal, status) {
+    let notas = JSON.parse(localStorage.getItem("notasPendentes")) || [];
+    notas = notas.map(n => n.idLocal === idLocal ? { ...n, status } : n);
+    localStorage.setItem("notasPendentes", JSON.stringify(notas));
+}
 
-    if (!inputImagem.files.length) {
-        alert("Selecione uma imagem.");
-        return;
-    }
-
+// =========================
+// Enviar nota ao servidor
+// =========================
+async function enviarNotaServidor(nota, idLocal) {
     const formData = new FormData();
-
-    formData.append("idCliente", clienteSelecionado._id);
-    formData.append("cliente", clienteSelecionado.cliente);
-    formData.append("numeroNota", numeroNota);
-    formData.append("valor", inputValor.value);
-    formData.append("dataEmissao", new Date().toISOString());
+    formData.append("idCliente", nota.idCliente);
+    formData.append("cliente", nota.cliente);
+    formData.append("numeroNota", nota.numeroNota);
+    formData.append("valor", nota.valor);
+    formData.append("dataEmissao", nota.dataEmissao);
     formData.append("pago", false);
     formData.append("enviado", false);
-    formData.append("img", inputImagem.files[0]);
+    formData.append("img", nota.img);
 
     try {
         const resposta = await fetch(`${API_URL}/notas`, {
@@ -190,17 +187,53 @@ formEntrega.addEventListener("submit", async (e) => {
             throw new Error(dados.error || "Erro ao cadastrar nota.");
         }
 
-        alert("Nota cadastrada com sucesso!");
-
-        formEntrega.reset();
-        nomeArquivo.textContent = "Nenhum arquivo selecionado";
-        clienteSelecionado = null;
-        numeroNota = 1;
+        atualizarStatusNota(idLocal, "enviado");
+        mostrarFeedback("Nota enviada com sucesso!", "sucesso");
 
     } catch (erro) {
         console.error(erro);
-        alert(erro.message);
+        atualizarStatusNota(idLocal, "erro");
+        mostrarFeedback("Erro ao enviar nota. Ela ficará salva localmente e será reenviada.", "erro");
     }
+}
+
+// =========================
+// Submit do formulário
+// =========================
+formEntrega.addEventListener("submit", async (e) => {
+    e.preventDefault();
+
+    if (!clienteSelecionado) {
+        mostrarFeedback("Selecione um cliente válido.", "erro");
+        return;
+    }
+
+    if (!inputImagem.files.length) {
+        mostrarFeedback("Selecione uma imagem.", "erro");
+        return;
+    }
+
+    const idLocal = Date.now();
+    const nota = {
+        idLocal,
+        idCliente: clienteSelecionado._id,
+        cliente: clienteSelecionado.cliente,
+        numeroNota,
+        valor: inputValor.value,
+        dataEmissao: new Date().toISOString(),
+        img: inputImagem.files[0],
+        status: "pendente"
+    };
+
+    salvarNotaLocal(nota);
+    mostrarFeedback("Nota registrada localmente. Realizando envio...", "info");
+
+    enviarNotaServidor(nota, idLocal);
+
+    formEntrega.reset();
+    nomeArquivo.textContent = "Nenhum arquivo selecionado";
+    clienteSelecionado = null;
+    numeroNota = 1;
 });
 
 // =========================
@@ -208,7 +241,7 @@ formEntrega.addEventListener("submit", async (e) => {
 // =========================
 (async function iniciar() {
     const sessaoValida = await verificarSessaoEntregador();
-    if (!sessaoValida) return; // já redirecionou, não carrega mais nada
+    if (!sessaoValida) return;
 
     carregarClientes();
 })();
