@@ -800,7 +800,7 @@ document.addEventListener("DOMContentLoaded", async () => {
                 const respostaData = await resposta.json();
 
                 if (resposta.ok) {
-                    mostrarFeedbacNota("Nota registrada com sucesso!", "sucesso");
+                    mostrarFeedbackNota("Nota registrada com sucesso!", "sucesso");
                     fecharModalNota();
 
                     // Atualiza a listagem dinamicamente
