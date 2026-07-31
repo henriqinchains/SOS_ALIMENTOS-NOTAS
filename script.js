@@ -20,6 +20,13 @@ const btnAbrirModalNota = document.getElementById("btnNovaNota");
 const modalContainerNota = document.getElementById("modal-containerNota");
 const btnFecharModalNota = document.getElementById("btn-fechar-modal-nota");
 
+const modalImagemNota = document.getElementById("modal-imagem-nota");
+const imagemNotaAmpliada = document.getElementById("imagemNotaAmpliada");
+const btnFecharModalImagem = document.getElementById("btn-fechar-modal-imagem");
+const btnPagoModalImagem = document.getElementById("btnPagoModalImagem");
+const btnBaixarModalImagem = document.getElementById("btnBaixarModalImagem");
+const btnExcluirModalImagem = document.getElementById("btnExcluirModalImagem");
+
 const btnSair = document.getElementById("btnSair");
 
 const formNota = document.getElementById("formNota");
@@ -120,6 +127,143 @@ async function fetchAutenticado(url, options = {}) {
     }
 
     return resposta;
+}
+
+// ==================== DOWNLOAD DE IMAGENS DE NOTA ====================
+
+// Deixa um texto seguro pra usar em nome de arquivo (sem acento, espaço, etc.)
+function slugify(texto) {
+    return (texto || "")
+        .normalize("NFD").replace(/[\u0300-\u036f]/g, "") // remove acentos
+        .replace(/[^a-zA-Z0-9]+/g, "-")
+        .replace(/^-+|-+$/g, "")
+        .toLowerCase() || "arquivo";
+}
+
+// Pega a extensão real do arquivo a partir da URL do Cloudinary (cai pra
+// "jpg" se por algum motivo não conseguir identificar).
+function obterExtensaoImagem(url) {
+    try {
+        const semQuery = url.split("?")[0];
+        const partes = semQuery.split(".");
+        return partes.length > 1 ? partes.pop().toLowerCase() : "jpg";
+    } catch {
+        return "jpg";
+    }
+}
+
+// Baixa uma única imagem de nota. Usa fetch + blob (em vez de só um <a
+// download>) porque a imagem vem de outro domínio (Cloudinary) — um link
+// direto cross-origin com "download" é ignorado por vários navegadores e
+// só abre a imagem numa aba nova em vez de baixar.
+async function baixarImagemNota(nota, clienteNome, botao) {
+    if (!nota.img) {
+        alert("Esta nota não tem foto anexada.");
+        return;
+    }
+
+    const textoOriginal = botao ? botao.textContent : null;
+    if (botao) {
+        botao.disabled = true;
+        botao.textContent = "⏳";
+    }
+
+    try {
+        const resposta = await fetch(nota.img);
+        if (!resposta.ok) throw new Error();
+
+        const blob = await resposta.blob();
+        const extensao = obterExtensaoImagem(nota.img);
+        const nomeArquivo = `nota-${nota.numeroNota || "sem-numero"}-${slugify(clienteNome)}.${extensao}`;
+
+        const urlBlob = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.href = urlBlob;
+        link.download = nomeArquivo;
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        URL.revokeObjectURL(urlBlob);
+
+    } catch (erro) {
+        console.error(erro);
+        alert("Não foi possível baixar a imagem. Tente novamente.");
+    } finally {
+        if (botao) {
+            botao.disabled = false;
+            botao.textContent = textoOriginal;
+        }
+    }
+}
+
+// Baixa todas as fotos de um conjunto de notas (usado pelo grupo) juntas
+// num único .zip, já que baixar uma por uma seria bem mais trabalhoso pro
+// usuário.
+async function baixarImagensAgrupadas(notas, clienteNome, nomeArquivoZip, botao) {
+    if (typeof JSZip === "undefined") {
+        alert("Não foi possível carregar a biblioteca de zip. Verifique sua conexão e tente novamente.");
+        return;
+    }
+
+    const notasComFoto = notas.filter(n => n.img);
+    if (notasComFoto.length === 0) {
+        alert("Nenhuma nota deste grupo tem foto anexada.");
+        return;
+    }
+
+    const textoOriginal = botao ? botao.textContent : null;
+    if (botao) {
+        botao.disabled = true;
+        botao.textContent = "Baixando...";
+    }
+
+    try {
+        const zip = new JSZip();
+
+        const resultados = await Promise.allSettled(
+            notasComFoto.map(async (nota, indice) => {
+                const resposta = await fetch(nota.img);
+                if (!resposta.ok) throw new Error(`Falha ao baixar imagem da nota ${nota.numeroNota || indice + 1}`);
+
+                const blob = await resposta.blob();
+                const extensao = obterExtensaoImagem(nota.img);
+                const nomeArquivo = `nota-${nota.numeroNota || indice + 1}.${extensao}`;
+                zip.file(nomeArquivo, blob);
+            })
+        );
+
+        const falhas = resultados.filter(r => r.status === "rejected");
+        if (falhas.length > 0) {
+            console.error("Algumas imagens não puderam ser baixadas:", falhas);
+        }
+
+        if (falhas.length === notasComFoto.length) {
+            throw new Error("Nenhuma imagem pôde ser baixada.");
+        }
+
+        const conteudoZip = await zip.generateAsync({ type: "blob" });
+        const urlBlob = URL.createObjectURL(conteudoZip);
+        const link = document.createElement("a");
+        link.href = urlBlob;
+        link.download = nomeArquivoZip;
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        URL.revokeObjectURL(urlBlob);
+
+        if (falhas.length > 0) {
+            alert(`${falhas.length} de ${notasComFoto.length} foto(s) não puderam ser baixadas, mas o restante está no zip.`);
+        }
+
+    } catch (erro) {
+        console.error(erro);
+        alert("Erro ao baixar as fotos do grupo.");
+    } finally {
+        if (botao) {
+            botao.disabled = false;
+            botao.textContent = textoOriginal;
+        }
+    }
 }
 
 // ==================== BUSCA DE CNPJ (BrasilAPI) ====================
@@ -435,7 +579,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     if (btnSair) {
         btnSair.addEventListener("click", (e) => {
             e.preventDefault();
-            
+
         })
     }
 
@@ -523,12 +667,24 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     btnFecharModalNota.addEventListener("click", fecharModalNota);
 
+    // Fechar modal de imagem ampliada da nota
+    function fecharModalImagemNota() {
+        modalImagemNota.style.display = "none";
+        document.body.style.overflow = "";
+        imagemNotaAmpliada.src = "";
+    }
+
+    btnFecharModalImagem.addEventListener("click", fecharModalImagemNota);
+
     window.addEventListener("mousedown", (e) => {
         if (e.target === modalContainer) {
             fecharModal();
         }
         if (e.target === modalContainerNota) {
             fecharModalNota();
+        }
+        if (e.target === modalImagemNota) {
+            fecharModalImagemNota();
         }
     });
 
@@ -782,8 +938,8 @@ document.addEventListener("DOMContentLoaded", async () => {
             </select>
             <select id="filtrarClientes">
                 <option value="">Filtrar</option>
-                <option value="comEmail">Com email</option>
-                <option value="semEmail">Sem email</option>
+                <option value="comCnpj">Com CNPJ</option>
+                <option value="semCnpj">Sem CNPJ</option>
             </select>
             
             <button id="carregarClientes">🔄 Atualizar</button>
@@ -808,8 +964,8 @@ document.addEventListener("DOMContentLoaded", async () => {
 
         filtrarClientes.addEventListener("change", (e) => {
             let lista = [...todosClientes];
-            if (e.target.value === "comEmail") lista = lista.filter(c => c.email);
-            if (e.target.value === "semEmail") lista = lista.filter(c => !c.email);
+            if (e.target.value === "comCnpj") lista = lista.filter(c => c.cnpj);
+            if (e.target.value === "semCnpj") lista = lista.filter(c => !c.cnpj);
             renderClientes(lista);
         });
 
@@ -833,7 +989,6 @@ document.addEventListener("DOMContentLoaded", async () => {
                 <p class="cliente-rua">${c.endereco || "Rua não cadastrada"}</p>
                 <p class="cliente-bairro">${c.bairro || "Bairro não cadastrado"}</p>
                 <div class="cliente-acoes">
-                    <button class="btn-ver">Ver</button>
                     <button class="btn-editar">Editar</button>
                 </div>
             `;
@@ -1048,8 +1203,8 @@ document.addEventListener("DOMContentLoaded", async () => {
                 <h3>${nota.cliente || "Cliente"} — Nota Nº ${nota.numeroNota || "-"}</h3>
                 <span class="nota-tag-valor">${valorFormatado}</span>
             </div>
-            <p class="cliente-rua"><strong>Emissão:</strong> ${dataFormatada}</p>
-            <p class="cliente-bairro"><strong>Excluída em:</strong> ${deletadoFormatado}</p>
+            <p class="cliente-data"><strong>Emissão:</strong> ${dataFormatada}</p>
+            <p class="cliente-excluida"><strong>Excluída em:</strong> ${deletadoFormatado}</p>
             <div class="nota-image">
                 <img src="${nota.img}" alt="Foto da nota">
             </div>
@@ -1324,9 +1479,9 @@ document.addEventListener("DOMContentLoaded", async () => {
                 <h3>${nota.cliente || "Cliente"} — Nota Nº ${nota.numeroNota || "-"}</h3>
                 <span class="nota-tag-valor">${valorFormatado}</span>
             </div>
-            <p class="cliente-rua"><strong>Emissão:</strong> ${dataFormatada}</p>
-            <p class="cliente-bairro"><strong>Status:</strong> ${nota.pago ? "Pago" : "Pendente"}</p>
-            <p class="cliente-rua"><strong>Entrega:</strong> ${nota.entregador || 'Não informado'}</p>
+            <p class="cliente-data"><strong>Emissão:</strong> ${dataFormatada}</p>
+            <p class="cliente-status"><strong>Status:</strong> ${nota.pago ? "Pago" : "Pendente"}</p>
+            <p class="cliente-entegador"><strong>Entregue:</strong> ${nota.entregador || 'Não informado'}</p>
         `;
 
         return card;
@@ -1905,6 +2060,7 @@ document.addEventListener("DOMContentLoaded", async () => {
             <div class="grupo-notas-rodape">
                 <span class="seta-status-grupo">▼</span>
                 <div class="grupo-notas-rodape-acoes">
+                    <button class="btn-baixar-grupo" title="Baixar fotos do período">⬇️ Baixar Fotos</button>
                     <button class="btn-editar-grupo" title="Editar observação">✏️ Editar</button>
                     <button class="btn-excluir-grupo" title="Excluir grupo">🗑️ Excluir</button>
                 </div>
@@ -1926,6 +2082,19 @@ document.addEventListener("DOMContentLoaded", async () => {
             corpoGrupo.style.display = estaAberto ? "grid" : "none";
             cardGrupo.querySelector(".seta-status-grupo").textContent = estaAberto ? "▲" : "▼";
         }
+
+        cardGrupo.querySelector(".btn-baixar-grupo").addEventListener("click", async (e) => {
+            e.stopPropagation();
+
+            const botao = e.currentTarget;
+            const periodoArquivo = dataMaisAntiga && dataMaisRecente
+                ? `${slugify(formatarDataCurta(dataMaisAntiga))}_a_${slugify(formatarDataCurta(dataMaisRecente))}`
+                : slugify(nomeGrupo);
+
+            const nomeArquivoZip = `fotos-${slugify(clienteAlvo.cliente)}-${periodoArquivo}.zip`;
+
+            await baixarImagensAgrupadas(notasDoGrupo, clienteAlvo.cliente, nomeArquivoZip, botao);
+        });
 
         cardGrupo.querySelector(".btn-editar-grupo").addEventListener("click", async (e) => {
             e.stopPropagation();
@@ -2010,6 +2179,61 @@ document.addEventListener("DOMContentLoaded", async () => {
                     });
             }
 
+            // Exclui a nota (soft delete, vai pra Lixeira). Extraída à parte
+            // pra ser reaproveitada tanto pelo botão 🗑️ do card quanto pelo
+            // botão "Excluir" dentro do popup de imagem ampliada.
+            async function excluirNota(nota, botaoDisparo) {
+                const confirmar = confirm("Excluir esta nota? Ela vai para a Lixeira e pode ser restaurada de lá.");
+                if (!confirmar) return false;
+
+                if (botaoDisparo) botaoDisparo.disabled = true;
+
+                try {
+                    const resposta = await fetchAutenticado(`https://sos-alimentos-servidor.onrender.com/api/notas/${nota._id}`, {
+                        method: "DELETE",
+                        credentials: "include"
+                    });
+
+                    if (!resposta.ok) throw new Error();
+
+                    await carregarNotasDoCliente(clienteAlvo, containerAlvo);
+                    return true;
+
+                } catch (erro) {
+                    console.error(erro);
+                    alert("Erro ao excluir nota.");
+                    if (botaoDisparo) botaoDisparo.disabled = false;
+                    return false;
+                }
+            }
+
+            // Abre a imagem da nota ampliada, com "Marcar como Pago" e
+            // "Excluir" ali mesmo no popup (em vez de abrir em outra aba).
+            function abrirModalImagemNota(nota, cardNotaItem, btnPago) {
+                imagemNotaAmpliada.src = nota.img;
+                btnPagoModalImagem.textContent = nota.pago ? "Desmarcar como Pago" : "Marcar como Pago";
+                btnExcluirModalImagem.disabled = false;
+
+                modalImagemNota.style.display = "flex";
+                document.body.style.overflow = "hidden";
+
+                // .onclick (em vez de addEventListener) porque o modal é reaproveitado
+                // entre notas diferentes — assim não empilha listener de nota antiga.
+                btnPagoModalImagem.onclick = () => {
+                    fecharModalImagemNota();
+                    marcarComoPago(nota, cardNotaItem, btnPago);
+                };
+
+                btnBaixarModalImagem.onclick = () => {
+                    baixarImagemNota(nota, clienteAlvo.cliente, btnBaixarModalImagem);
+                };
+
+                btnExcluirModalImagem.onclick = async () => {
+                    const excluiu = await excluirNota(nota, btnExcluirModalImagem);
+                    if (excluiu) fecharModalImagemNota();
+                };
+            }
+
             // Cria o card individual de uma nota (com todos os listeners já ligados)
             function criarCardNotaItem(nota, index) {
                 const cardNotaItem = document.createElement("div");
@@ -2035,25 +2259,26 @@ document.addEventListener("DOMContentLoaded", async () => {
                         <h3>Nota Nº ${nota.numeroNota || index + 1}</h3>
                         <span class="nota-tag-valor">${valorFormatado}</span>
                     </div>
-                    <p class="cliente-rua"><strong>Emissão:</strong> ${dataFormatada}</p>
-                    <p class="cliente-bairro"><strong>E-mail:</strong> ${nota.email || 'Não informado'}</p>
-                    <p class="cliente-rua"><strong>Entrega:</strong> ${nota.entregador || 'Não informado'}</p>
+                    <p class="cliente-data"><strong>Emissão:</strong> ${dataFormatada}</p>
+                    <p class="cliente-email"><strong>E-mail:</strong> ${nota.email || 'Não informado'}</p>
+                    <p class="cliente-entregador"><strong>Entregue:</strong> ${nota.entregador || 'Não informado'}</p>
                     <div class="nota-image">
                         <img src="${nota.img}" alt="Foto da nota">
                     </div>
                     <div class="nota-card-acoes">
                         <button class="btn-marcar-pago">${nota.pago ? "Desmarcar como Pago" : "Marcar como Pago"}</button>
+                        <button class="btn-baixar-nota" type="button" title="Baixar foto">⬇️</button>
                         <button class="btn-excluir-nota" type="button" title="Excluir nota">🗑️</button>
                     </div>
                 `;
 
                 const imgNota = cardNotaItem.querySelector(".nota-image img");
+                const btnPago = cardNotaItem.querySelector(".btn-marcar-pago");
+
                 imgNota.addEventListener("click", (e) => {
                     e.stopPropagation();
-                    window.open(nota.img, "_blank");
+                    abrirModalImagemNota(nota, cardNotaItem, btnPago);
                 });
-
-                const btnPago = cardNotaItem.querySelector(".btn-marcar-pago");
 
                 btnPago.addEventListener("click", (e) => {
                     e.preventDefault();
@@ -2066,28 +2291,21 @@ document.addEventListener("DOMContentLoaded", async () => {
                 btnExcluirNota.addEventListener("click", async (e) => {
                     e.preventDefault();
                     e.stopPropagation();
-
-                    const confirmar = confirm("Excluir esta nota? Ela vai para a Lixeira e pode ser restaurada de lá.");
-                    if (!confirmar) return;
-
-                    btnExcluirNota.disabled = true;
-
-                    try {
-                        const resposta = await fetchAutenticado(`https://sos-alimentos-servidor.onrender.com/api/notas/${nota._id}`, {
-                            method: "DELETE",
-                            credentials: "include"
-                        });
-
-                        if (!resposta.ok) throw new Error();
-
-                        await carregarNotasDoCliente(clienteAlvo, containerAlvo);
-
-                    } catch (erro) {
-                        console.error(erro);
-                        alert("Erro ao excluir nota.");
-                        btnExcluirNota.disabled = false;
-                    }
+                    await excluirNota(nota, btnExcluirNota);
                 });
+
+                const btnBaixarNota = cardNotaItem.querySelector(".btn-baixar-nota");
+
+                if (!nota.img) {
+                    btnBaixarNota.disabled = true;
+                    btnBaixarNota.title = "Nenhuma foto anexada";
+                } else {
+                    btnBaixarNota.addEventListener("click", (e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        baixarImagemNota(nota, clienteAlvo.cliente, btnBaixarNota);
+                    });
+                }
 
                 cardNotaItem.addEventListener("click", (e) => {
                     // O clique nunca deve borbulhar pro card do grupo (senão ele fecha/abre sem querer)

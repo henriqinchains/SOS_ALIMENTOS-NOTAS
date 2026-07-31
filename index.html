@@ -139,6 +139,19 @@
             </div>
         </div>
 
+        <div id="modal-imagem-nota" class="modal-overlay" style="display: none">
+            <div class="modal-imagem-conteudo">
+                <button id="btn-fechar-modal-imagem" class="close-button">&times;</button>
+                <img id="imagemNotaAmpliada" src="" alt="Foto da nota ampliada">
+                <div class="modal-imagem-acoes">
+                    <button type="button" id="btnPagoModalImagem" class="button">Marcar como Pago</button>
+                    <button type="button" id="btnBaixarModalImagem" class="button button-secundario">⬇️ Baixar</button>
+                    <button type="button" id="btnExcluirModalImagem" class="button button-secundario">🗑️
+                        Excluir</button>
+                </div>
+            </div>
+        </div>
+
         <section id="inicial">
             <div class="inicial-menu" id="inicial-menu">
                 <h1>Bem-vindo 👋</h1>
@@ -178,6 +191,7 @@
 
 
 
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
     <script src="script.js"></script>
     <script>
         // Evento de Logout
