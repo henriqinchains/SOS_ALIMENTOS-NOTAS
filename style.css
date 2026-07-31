@@ -966,9 +966,14 @@ input[type="file"] {
 }
 
 /* Só ocupa a linha inteira quando aberto — precisa de espaço de verdade
-   pra mostrar a grade de notas dentro dele */
+   pra mostrar a grade de notas dentro dele.
+   CORREÇÃO: o card mantinha a altura fixa de 328px mesmo aberto, então o
+   corpo com as notas (grupo-notas-corpo) ficava mais alto que o card e
+   "vazava" por cima dos cards da linha seguinte — daí a sobreposição.
+   Com height: auto o card cresce de verdade pra caber o conteúdo. */
 .grupo-notas-card.aberto {
     grid-column: 1 / -1;
+    height: auto;
 }
 
 .grupo-notas-topo {
