@@ -366,6 +366,7 @@ section[hidden] {
     transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
 }
 
+.btn-ver:hover,
 .btn-editar:hover {
     border-color: var(--folha);
     color: var(--folha);
@@ -470,6 +471,114 @@ section[hidden] {
 .modal-card-nota h2 span {
     color: var(--folha);
     font-weight: 700;
+}
+
+/* ---------- Feedback (cliente e nota) ---------- */
+
+.feedback {
+    font-size: 13px;
+    font-weight: 600;
+    border-radius: 4px;
+    transition: padding 0.15s ease;
+}
+
+.feedback:empty {
+    margin: 0;
+    padding: 0;
+}
+
+.feedback--sucesso {
+    margin: -4px 0 18px;
+    padding: 10px 12px;
+    background: var(--folha-clara);
+    border: 1px solid rgba(76, 122, 74, 0.3);
+    color: var(--folha);
+}
+
+.feedback--erro {
+    margin: -4px 0 18px;
+    padding: 10px 12px;
+    background: var(--tomate-claro);
+    border: 1px solid rgba(193, 68, 46, 0.35);
+    color: var(--tomate);
+}
+
+.feedback--aviso {
+    margin: -4px 0 18px;
+    padding: 10px 12px;
+    background: var(--dourado-claro);
+    border: 1px solid rgba(227, 162, 60, 0.4);
+    color: var(--dourado-escuro);
+}
+
+/* ---------- Importar clientes via CSV ---------- */
+
+.importar-csv-area {
+    margin: -8px 0 18px;
+}
+
+.btn-importar-csv {
+    width: 100%;
+    font-family: var(--fonte-texto);
+    font-weight: 600;
+    font-size: 13.5px;
+    padding: 10px 14px;
+    border-radius: 4px;
+    border: 1.5px dashed var(--dourado-escuro);
+    background: var(--dourado-claro);
+    color: #6b4c15;
+    transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.btn-importar-csv:hover {
+    background: var(--dourado);
+    color: #241605;
+}
+
+.previa-importacao-csv {
+    margin: -4px 0 18px;
+    padding: 14px 16px;
+    border-radius: 4px;
+    border: 1.5px solid var(--papel-sombra);
+    background: var(--papel);
+}
+
+.previa-importacao-resumo {
+    margin: 0 0 8px;
+    font-size: 14px;
+    color: var(--tinta);
+}
+
+.previa-importacao-avisos {
+    margin: 0 0 10px;
+    padding-left: 18px;
+    font-size: 12.5px;
+    color: var(--dourado-escuro);
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+}
+
+.previa-importacao-lista {
+    margin: 0 0 14px;
+    padding-left: 18px;
+    max-height: 130px;
+    overflow-y: auto;
+    font-size: 13px;
+    color: var(--tinta-suave);
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.previa-importacao-acoes {
+    display: flex;
+    gap: 10px;
+}
+
+.previa-importacao-acoes .button,
+.previa-importacao-acoes .button-secundario {
+    margin-top: 0;
 }
 
 /* ---------- Grids de formulário ---------- */
@@ -833,7 +942,6 @@ input[type="file"] {
     transition: border-color 0.15s ease, box-shadow 0.15s ease;
     font-family: var(--fonte-display);
 }
-
 .nota-fiscal-card-ajuste h3,
 .nota-fiscal-card-ajuste p,
 .nota-fiscal-card-ajuste strong {
@@ -956,24 +1064,22 @@ input[type="file"] {
    ============================================================ */
 
 .grupo-notas-card {
-    grid-column: span 1;
+    grid-column: span 2;
+    align-self: stretch;
+    min-height: 320px;
+    display: flex;
+    flex-direction: column;
     background: var(--branco);
     border: 2px dashed var(--dourado-escuro);
     border-radius: var(--raio);
-    padding: 18px 20px;
+    padding: 16px 18px;
     cursor: pointer;
-    height: 328px;
 }
 
 /* Só ocupa a linha inteira quando aberto — precisa de espaço de verdade
-   pra mostrar a grade de notas dentro dele.
-   CORREÇÃO: o card mantinha a altura fixa de 328px mesmo aberto, então o
-   corpo com as notas (grupo-notas-corpo) ficava mais alto que o card e
-   "vazava" por cima dos cards da linha seguinte — daí a sobreposição.
-   Com height: auto o card cresce de verdade pra caber o conteúdo. */
+   pra mostrar a grade de notas dentro dele */
 .grupo-notas-card.aberto {
     grid-column: 1 / -1;
-    height: auto;
 }
 
 .grupo-notas-topo {
@@ -1064,7 +1170,7 @@ input[type="file"] {
 }
 
 .grupo-notas-rodape {
-    margin-top: 14px;
+    margin-top: auto;
     padding-top: 12px;
     border-top: 1px dashed var(--papel-sombra);
     display: flex;
@@ -1325,44 +1431,6 @@ input[type="file"] {
 
 .erro-txt {
     color: var(--tomate);
-}
-
-/* ============================================================
-   FEEDBACK INLINE (mensagens de status nos modais)
-   ============================================================ */
-
-.feedback {
-    margin-bottom: 16px;
-    font-size: 14px;
-    font-family: var(--fonte-texto);
-    padding: 10px 14px;
-    border-radius: var(--raio);
-    display: none;
-    /* invisível por padrão */
-}
-
-/* Sucesso (verde) */
-.feedback--sucesso {
-    display: block;
-    background: rgba(76, 122, 74, 0.15);
-    border: 1.5px solid var(--folha);
-    color: var(--folha);
-}
-
-/* Erro (vermelho) */
-.feedback--erro {
-    display: block;
-    background: rgba(193, 68, 46, 0.15);
-    border: 1.5px solid var(--tomate);
-    color: var(--tomate);
-}
-
-/* Informação/aviso (dourado) */
-.feedback--info {
-    display: block;
-    background: rgba(227, 162, 60, 0.15);
-    border: 1.5px solid var(--dourado);
-    color: var(--dourado-escuro);
 }
 
 /* ============================================================
