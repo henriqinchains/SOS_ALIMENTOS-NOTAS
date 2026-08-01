@@ -85,6 +85,21 @@ function limparFeedbackNota() {
     fb.className = "feedback";
 }
 
+// Mesmo padrão, só que pro modal de cliente (cadastro, edição e importação de CSV)
+function mostrarFeedbackCliente(msg, tipo) {
+    const fb = document.getElementById("feedbackCliente");
+    if (!fb) return;
+    fb.textContent = msg;
+    fb.className = "feedback feedback--" + tipo;
+}
+
+function limparFeedbackCliente() {
+    const fb = document.getElementById("feedbackCliente");
+    if (!fb) return;
+    fb.textContent = "";
+    fb.className = "feedback";
+}
+
 
 async function verificarSessao() {
     try {
@@ -276,6 +291,205 @@ async function baixarImagensAgrupadas(notas, clienteNome, nomeArquivoZip, botao)
         if (botao) {
             botao.disabled = false;
             botao.textContent = textoOriginal;
+        }
+    }
+}
+
+// ==================== IMPORTAR CLIENTES VIA CSV ====================
+
+const btnImportarCsv = document.getElementById("btnImportarCsv");
+const inputImportarCsv = document.getElementById("inputImportarCsv");
+const importarCsvArea = document.getElementById("importarCsvArea");
+const previaImportacaoCsv = document.getElementById("previaImportacaoCsv");
+
+let clientesParaImportar = [];
+
+if (btnImportarCsv && inputImportarCsv) {
+    btnImportarCsv.addEventListener("click", () => inputImportarCsv.click());
+
+    inputImportarCsv.addEventListener("change", async (e) => {
+        const arquivo = e.target.files[0];
+        if (!arquivo) return;
+
+        await processarCsvClientes(arquivo);
+
+        // Permite selecionar o mesmo arquivo de novo depois (senão o "change"
+        // não dispara de novo pro mesmo arquivo)
+        inputImportarCsv.value = "";
+    });
+}
+
+async function processarCsvClientes(arquivo) {
+    limparFeedbackCliente();
+
+    if (typeof Papa === "undefined") {
+        mostrarFeedbackCliente("Não foi possível carregar a biblioteca de CSV. Verifique sua conexão e tente novamente.", "erro");
+        return;
+    }
+
+    try {
+        const buffer = await arquivo.arrayBuffer();
+
+        // O relatório é exportado em Windows-1252/Latin-1, não UTF-8 — ler
+        // como UTF-8 aqui bagunçaria os acentos ("Ó", "Ç", "Ã" etc.)
+        const texto = new TextDecoder("windows-1252").decode(buffer);
+
+        const resultado = Papa.parse(texto, {
+            delimiter: ";",
+            skipEmptyLines: true,
+        });
+
+        const linhas = resultado.data;
+
+        // O arquivo tem linhas de cabeçalho do relatório antes da linha real
+        // de colunas ("Cliente;Loja;Nome;..."), então procura ela em vez de
+        // assumir que é sempre a primeira linha.
+        const indiceCabecalho = linhas.findIndex(l => l[0] === "Cliente" && l.includes("Nome"));
+
+        if (indiceCabecalho === -1) {
+            mostrarFeedbackCliente("Não reconheci o formato deste CSV. Confira se é o relatório de clientes exportado do sistema antigo.", "erro");
+            return;
+        }
+
+        const colunas = linhas[indiceCabecalho];
+        const idxNome = colunas.indexOf("Nome");
+        const idxCpf = colunas.indexOf("CPF"); // na prática guarda o CNPJ, apesar do nome da coluna
+        const idxFone = colunas.indexOf("Fone");
+        const idxCelular = colunas.indexOf("Celular");
+        const idxEmail = colunas.indexOf("Email");
+        const idxEndereco = colunas.indexOf("Endereco");
+        const idxNumero = colunas.indexOf("Numero");
+        const idxCidade = colunas.indexOf("Cidade");
+
+        // Alguns campos numéricos/CNPJ vêm com um apóstrofo na frente
+        // (truque do Excel pra não perder zero à esquerda) — tira daqui.
+        const limpar = (valor) => (valor || "").replace(/^'/, "").trim();
+
+        clientesParaImportar = linhas
+            .slice(indiceCabecalho + 1)
+            .filter(linha => linha[idxNome] && linha[idxNome].trim())
+            .map(linha => {
+                const enderecoBase = limpar(linha[idxEndereco]);
+                const numero = limpar(linha[idxNumero]);
+                const cidade = limpar(linha[idxCidade]);
+
+                return {
+                    cliente: limpar(linha[idxNome]),
+                    cnpj: limpar(linha[idxCpf]),
+                    telefone: limpar(linha[idxCelular]) || limpar(linha[idxFone]),
+                    email: limpar(linha[idxEmail]),
+                    endereco: [enderecoBase, numero].filter(Boolean).join(", "),
+                    // O relatório não tem coluna de Bairro — uso a Cidade como
+                    // aproximação provisória. Isso é só a prévia; dá pra
+                    // corrigir campo a campo depois que a importação de
+                    // verdade existir no backend.
+                    bairro: cidade,
+                    complemento: "",
+                };
+            });
+
+        exibirPreviaImportacaoCsv();
+
+    } catch (erro) {
+        console.error(erro);
+        mostrarFeedbackCliente("Erro ao ler o arquivo CSV.", "erro");
+    }
+}
+
+function exibirPreviaImportacaoCsv() {
+    if (!previaImportacaoCsv) return;
+
+    if (clientesParaImportar.length === 0) {
+        previaImportacaoCsv.hidden = true;
+        previaImportacaoCsv.innerHTML = "";
+        mostrarFeedbackCliente("Nenhum cliente válido encontrado nesse CSV.", "erro");
+        return;
+    }
+
+    const semCnpj = clientesParaImportar.filter(c => !c.cnpj).length;
+    const semTelefone = clientesParaImportar.filter(c => !c.telefone).length;
+
+    previaImportacaoCsv.hidden = false;
+    previaImportacaoCsv.innerHTML = `
+        <p class="previa-importacao-resumo">
+            <strong>${clientesParaImportar.length}</strong> cliente(s) encontrados no CSV.
+        </p>
+        <ul class="previa-importacao-avisos">
+            <li>⚠️ O campo <strong>Bairro</strong> foi preenchido com a Cidade do relatório (o CSV não tem essa coluna) — revise antes de importar de verdade.</li>
+            ${semCnpj ? `<li>${semCnpj} cliente(s) sem CNPJ no relatório.</li>` : ""}
+            ${semTelefone ? `<li>${semTelefone} cliente(s) sem telefone no relatório.</li>` : ""}
+        </ul>
+        <ul class="previa-importacao-lista">
+            ${clientesParaImportar.slice(0, 8).map(c => `<li>${c.cliente}${c.cnpj ? ` — ${c.cnpj}` : ""}</li>`).join("")}
+            ${clientesParaImportar.length > 8 ? `<li>e mais ${clientesParaImportar.length - 8}...</li>` : ""}
+        </ul>
+        <div class="previa-importacao-acoes">
+            <button type="button" id="btnCancelarImportacaoCsv" class="button button-secundario">Cancelar</button>
+            <button type="button" id="btnConfirmarImportacaoCsv" class="button">Confirmar Importação (${clientesParaImportar.length})</button>
+        </div>
+    `;
+
+    previaImportacaoCsv.querySelector("#btnCancelarImportacaoCsv").addEventListener("click", () => {
+        clientesParaImportar = [];
+        previaImportacaoCsv.hidden = true;
+        previaImportacaoCsv.innerHTML = "";
+        limparFeedbackCliente();
+    });
+
+    previaImportacaoCsv.querySelector("#btnConfirmarImportacaoCsv").addEventListener("click", confirmarImportacaoCsv);
+}
+
+// A rota de importação em lote ainda não existe no backend — combinado que
+// ela vem depois. Isso já está pronto pra chamar assim que ela existir; até
+// lá, o clique vai só mostrar o erro de rota não encontrada.
+async function confirmarImportacaoCsv() {
+    const btnConfirmar = document.getElementById("btnConfirmarImportacaoCsv");
+    const textoOriginal = btnConfirmar ? btnConfirmar.textContent : null;
+
+    if (btnConfirmar) {
+        btnConfirmar.disabled = true;
+        btnConfirmar.textContent = "Importando...";
+    }
+
+    try {
+        const resposta = await fetchAutenticado("https://sos-alimentos-servidor.onrender.com/api/clientes/importar-lote", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            credentials: "include",
+            body: JSON.stringify({ clientes: clientesParaImportar })
+        });
+
+        const respostaData = await resposta.json().catch(() => ({}));
+
+        if (resposta.ok) {
+            const importados = respostaData.importados ?? clientesParaImportar.length;
+            const ignorados = respostaData.ignorados || [];
+
+            if (ignorados.length > 0) {
+                console.warn("Clientes ignorados na importação:", ignorados);
+                mostrarFeedbackCliente(
+                    `✅ ${importados} cliente(s) importado(s). ⚠️ ${ignorados.length} ignorado(s) (nome duplicado ou dado inválido) — veja o console para detalhes.`,
+                    "aviso"
+                );
+            } else {
+                mostrarFeedbackCliente(`✅ ${importados} cliente(s) importado(s) com sucesso!`, "sucesso");
+            }
+
+            clientesParaImportar = [];
+            previaImportacaoCsv.hidden = true;
+            previaImportacaoCsv.innerHTML = "";
+            carregarClientes();
+        } else {
+            mostrarFeedbackCliente(respostaData.erro || "Erro ao importar clientes.", "erro");
+        }
+
+    } catch (erro) {
+        console.error(erro);
+        mostrarFeedbackCliente("A rota de importação em lote ainda não existe no servidor — isso é esperado até criarmos ela.", "erro");
+    } finally {
+        if (btnConfirmar) {
+            btnConfirmar.disabled = false;
+            btnConfirmar.textContent = textoOriginal;
         }
     }
 }
@@ -484,6 +698,14 @@ function aplicarEstadoModalCliente() {
 
     btnSubmitCliente.classList.remove("sem-alteracoes");
 
+    // Importação em lote só faz sentido no cadastro de clientes novos
+    if (importarCsvArea) importarCsvArea.hidden = estadoModalCliente !== "criar";
+    if (estadoModalCliente !== "criar" && previaImportacaoCsv) {
+        previaImportacaoCsv.hidden = true;
+        previaImportacaoCsv.innerHTML = "";
+        clientesParaImportar = [];
+    }
+
     if (estadoModalCliente === "criar") {
         if (tituloEl) tituloEl.innerHTML = `Registrar Novo Cliente <span>SOS</span>`;
         btnSubmitCliente.textContent = "ENVIAR";
@@ -609,6 +831,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 
             formNovoCliente.reset();
             aplicarEstadoModalCliente();
+            limparFeedbackCliente();
 
             modalContainer.style.display = "flex";
             document.body.style.overflow = "hidden";
@@ -629,6 +852,13 @@ document.addEventListener("DOMContentLoaded", async () => {
         estadoModalCliente = "criar";
         clienteEmEdicao = null;
         valoresOriginaisCliente = null;
+        clientesParaImportar = [];
+
+        if (previaImportacaoCsv) {
+            previaImportacaoCsv.hidden = true;
+            previaImportacaoCsv.innerHTML = "";
+        }
+        limparFeedbackCliente();
 
         if (formNovoCliente) {
             formNovoCliente.reset();
