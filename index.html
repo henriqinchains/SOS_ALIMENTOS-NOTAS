@@ -35,8 +35,16 @@
                 <button id="btn-fechar-modal" class="close-button">&times;</button>
                 <h2 id="tituloModalCliente">Registrar Novo Cliente <span>SOS</span></h2>
 
+                <div id="importarCsvArea" class="importar-csv-area">
+                    <button type="button" id="btnImportarCsv" class="btn-importar-csv">📥 Importar clientes via
+                        CSV</button>
+                    <input type="file" id="inputImportarCsv" accept=".csv" hidden>
+                </div>
+
                 <!-- Feedback específico do cliente -->
                 <div id="feedbackCliente" class="feedback"></div>
+
+                <div id="previaImportacaoCsv" class="previa-importacao-csv" hidden></div>
 
                 <form id="formNovoCliente">
                     <div class="grid">
@@ -82,8 +90,6 @@
                     </div>
                 </form>
             </div>
-        </div>
-
         </div>
 
         <div id="modal-containerNota" class="modal-overlay" style="display: none">
@@ -145,8 +151,6 @@
             </div>
         </div>
 
-        </div>
-
         <div id="modal-imagem-nota" class="modal-overlay" style="display: none">
             <div class="modal-imagem-conteudo">
                 <button id="btn-fechar-modal-imagem" class="close-button">&times;</button>
@@ -200,6 +204,7 @@
 
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
     <script src="script.js"></script>
     <script>
         // Evento de Logout
