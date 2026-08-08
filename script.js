@@ -1694,6 +1694,8 @@ document.addEventListener("DOMContentLoaded", async () => {
         `;
         container.appendChild(resumo);
 
+        montarTabelaEntregadores(container, notasNoPeriodo);
+
         if (notasNoPeriodo.length === 0) {
             const aviso = document.createElement("p");
             aviso.classList.add("sem-notas-txt");
@@ -1710,6 +1712,98 @@ document.addEventListener("DOMContentLoaded", async () => {
         });
 
         container.appendChild(grid);
+    }
+
+    // Tabela com uma coluna por entregador, listando os clientes que ele
+    // atendeu no período filtrado, com o horário de cada entrega ao lado.
+    // Colunas têm alturas diferentes (cada entregador fez um número
+    // diferente de entregas) — por isso as células que sobram ficam vazias
+    // em vez de a tabela quebrar.
+    function montarTabelaEntregadores(container, notasNoPeriodo) {
+        const secao = document.createElement("div");
+        secao.classList.add("tabela-entregadores-secao");
+
+        const titulo = document.createElement("h3");
+        titulo.classList.add("tabela-entregadores-titulo");
+        titulo.textContent = "Entregas por Entregador";
+        secao.appendChild(titulo);
+
+        const porEntregador = new Map(); // nome -> [{ cliente, hora, timestamp }]
+
+        notasNoPeriodo.forEach(nota => {
+            const nomeEntregador = nota.entregador || "Não informado";
+
+            let hora = "--:--";
+            let timestamp = 0;
+            if (nota.createdAt) {
+                const data = new Date(nota.createdAt);
+                if (!isNaN(data)) {
+                    hora = data.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+                    timestamp = data.getTime();
+                }
+            }
+
+            if (!porEntregador.has(nomeEntregador)) porEntregador.set(nomeEntregador, []);
+            porEntregador.get(nomeEntregador).push({
+                cliente: nota.cliente || "Cliente não identificado",
+                hora,
+                timestamp
+            });
+        });
+
+        if (porEntregador.size === 0) {
+            const aviso = document.createElement("p");
+            aviso.classList.add("sem-notas-txt");
+            aviso.textContent = "Nenhuma entrega registrada nesse período.";
+            secao.appendChild(aviso);
+            container.appendChild(secao);
+            return;
+        }
+
+        // Cada coluna ordenada por horário (entregas mais cedo primeiro)
+        porEntregador.forEach(lista => lista.sort((a, b) => a.timestamp - b.timestamp));
+
+        const entregadores = [...porEntregador.keys()].sort((a, b) => a.localeCompare(b));
+        const maxLinhas = Math.max(...entregadores.map(nome => porEntregador.get(nome).length));
+
+        const wrapper = document.createElement("div");
+        wrapper.classList.add("tabela-entregadores-wrapper");
+
+        const tabela = document.createElement("table");
+        tabela.classList.add("tabela-entregadores");
+
+        const thead = document.createElement("thead");
+        const linhaCabecalho = document.createElement("tr");
+        entregadores.forEach(nome => {
+            const th = document.createElement("th");
+            th.innerHTML = `${nome}<span class="tabela-entregadores-contagem">${porEntregador.get(nome).length} entrega(s)</span>`;
+            linhaCabecalho.appendChild(th);
+        });
+        thead.appendChild(linhaCabecalho);
+        tabela.appendChild(thead);
+
+        const tbody = document.createElement("tbody");
+        for (let i = 0; i < maxLinhas; i++) {
+            const linha = document.createElement("tr");
+
+            entregadores.forEach(nome => {
+                const item = porEntregador.get(nome)[i];
+                const td = document.createElement("td");
+
+                if (item) {
+                    td.innerHTML = `<span class="entrega-cliente">${item.cliente}</span><span class="entrega-hora">${item.hora}</span>`;
+                }
+
+                linha.appendChild(td);
+            });
+
+            tbody.appendChild(linha);
+        }
+        tabela.appendChild(tbody);
+
+        wrapper.appendChild(tabela);
+        secao.appendChild(wrapper);
+        container.appendChild(secao);
     }
 
     // Card só-leitura (sem ações) reaproveitando o mesmo visual das outras
