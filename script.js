@@ -47,6 +47,8 @@ const inputDataEmissao = document.getElementById("dataEmissao");
 const listaClientes = document.getElementById("listaClientes");
 
 let todosClientes = [];
+let todosEntregadores = [];
+
 let contadorNotasPorCliente = new Map(); // clienteId -> elemento <span> da contagem na aba Notas
 
 // FATURAMENTO: filtro de período (default = dia atual, conforme pedido)
@@ -1095,7 +1097,27 @@ document.addEventListener("DOMContentLoaded", async () => {
             btnSubmitNota.innerText = "Registrar Nota";
         });
     }
+    // Carregar entregadores para exibição
+    async function carregarEntregadores() {
+    try {
+        const resposta = await fetchAutenticado(
+            "https://sos-alimentos-servidor.onrender.com/api/usuarios/entregadores",
+            {
+                credentials: "include"
+            }
+        );
 
+        if (!resposta.ok) {
+            throw new Error("Erro ao buscar entregadores");
+        }
+
+        todosEntregadores = await resposta.json();
+
+    } catch (erro) {
+        console.error("Erro ao carregar entregadores:", erro);
+        todosEntregadores = [];
+    }
+}
 
     // Carregar clientes pra exibição
     async function carregarClientes() {
@@ -1988,6 +2010,10 @@ document.addEventListener("DOMContentLoaded", async () => {
     }
 
     async function abrirModalPlanejarRotas() {
+        await Promise.all([
+            carregarClientes();
+            carregarEntregadores();
+        ]);
         if (!modalPlanejarRotas) return;
 
         limparFeedbackRotas();
@@ -2046,135 +2072,386 @@ document.addEventListener("DOMContentLoaded", async () => {
     // dos clientes já adicionados. Reaproveitado tanto pra rota nova quanto
     // pra editar uma já existente (passando entregador/clientes prontos).
     function criarBlocoEntregadorRota(nomeEntregador = "", clientesIniciais = []) {
-        const bloco = document.createElement("div");
-        bloco.classList.add("bloco-entregador-rota");
-        bloco.innerHTML = `
-            <div class="bloco-entregador-rota-topo">
-                <input type="text" class="input-nome-entregador-rota" placeholder="Nome do entregador" value="${nomeEntregador}">
-                <button type="button" class="btn-remover-bloco-rota" title="Remover este entregador">🗑️</button>
-            </div>
-            <div class="autocomplete bloco-entregador-rota-busca">
-                <input type="text" class="input-buscar-cliente-rota" placeholder="Buscar cliente para adicionar..." autocomplete="off">
-                <div class="autocomplete-list lista-sugestoes-rota"></div>
-            </div>
-            <div class="chips-clientes-rota"></div>
-        `;
+    const bloco = document.createElement("div");
+    bloco.classList.add("bloco-entregador-rota");
 
-        const listaChips = bloco.querySelector(".chips-clientes-rota");
-        const clientesDoBloco = [...clientesIniciais];
+    bloco.innerHTML = `
+        <div class="bloco-entregador-rota-topo">
+            <div class="autocomplete bloco-entregador-rota-entregador">
+                <input
+                    type="text"
+                    class="input-nome-entregador-rota"
+                    placeholder="Buscar entregador..."
+                    value="${nomeEntregador}"
+                    autocomplete="off"
+                >
+                <div class="autocomplete-list lista-sugestoes-entregador-rota"></div>
+            </div>
 
-        function renderizarChips() {
-            listaChips.innerHTML = clientesDoBloco.map((nome, indice) => `
+            <button
+                type="button"
+                class="btn-remover-bloco-rota"
+                title="Remover este entregador"
+            >
+                🗑️
+            </button>
+        </div>
+
+        <div class="autocomplete bloco-entregador-rota-busca">
+            <input
+                type="text"
+                class="input-buscar-cliente-rota"
+                placeholder="Buscar cliente para adicionar..."
+                autocomplete="off"
+            >
+            <div class="autocomplete-list lista-sugestoes-rota"></div>
+        </div>
+
+        <div class="chips-clientes-rota"></div>
+    `;
+
+    // =========================================================
+    // ELEMENTOS DO BLOCO
+    // =========================================================
+
+    const inputEntregador = bloco.querySelector(
+        ".input-nome-entregador-rota"
+    );
+
+    const listaEntregadores = bloco.querySelector(
+        ".lista-sugestoes-entregador-rota"
+    );
+
+    const inputBusca = bloco.querySelector(
+        ".input-buscar-cliente-rota"
+    );
+
+    const listaSugestoes = bloco.querySelector(
+        ".lista-sugestoes-rota"
+    );
+
+    const listaChips = bloco.querySelector(
+        ".chips-clientes-rota"
+    );
+
+    const clientesDoBloco = [...clientesIniciais];
+
+
+    // =========================================================
+    // RENDERIZAR CHIPS DOS CLIENTES
+    // =========================================================
+
+    function renderizarChips() {
+        listaChips.innerHTML = clientesDoBloco
+            .map((nome, indice) => `
                 <span class="chip-cliente-rota">
                     ${nome}
-                    <button type="button" class="chip-cliente-rota-remover" data-indice="${indice}">&times;</button>
+                    <button
+                        type="button"
+                        class="chip-cliente-rota-remover"
+                        data-indice="${indice}"
+                    >
+                        &times;
+                    </button>
                 </span>
-            `).join("");
+            `)
+            .join("");
 
-            listaChips.querySelectorAll(".chip-cliente-rota-remover").forEach(btn => {
+        listaChips
+            .querySelectorAll(".chip-cliente-rota-remover")
+            .forEach(btn => {
                 btn.addEventListener("click", () => {
-                    clientesDoBloco.splice(Number(btn.dataset.indice), 1);
+                    clientesDoBloco.splice(
+                        Number(btn.dataset.indice),
+                        1
+                    );
+
                     renderizarChips();
                 });
             });
-        }
-        renderizarChips();
+    }
 
-        bloco.querySelector(".btn-remover-bloco-rota").addEventListener("click", () => {
+    renderizarChips();
+
+
+    // =========================================================
+    // AUTOCOMPLETE DE ENTREGADORES
+    // =========================================================
+
+    inputEntregador.addEventListener("input", () => {
+        const texto = inputEntregador.value
+            .trim()
+            .toLowerCase();
+
+        listaEntregadores.innerHTML = "";
+
+        if (!texto) {
+            return;
+        }
+
+        const encontrados = todosEntregadores
+            .filter(e =>
+                e.nome &&
+                e.nome.toLowerCase().includes(texto)
+            )
+            .slice(0, 8);
+
+        encontrados.forEach(entregador => {
+            const item = document.createElement("div");
+
+            item.className = "autocomplete-item";
+            item.textContent = entregador.nome;
+
+            item.addEventListener("click", () => {
+                inputEntregador.value = entregador.nome;
+                listaEntregadores.innerHTML = "";
+            });
+
+            listaEntregadores.appendChild(item);
+        });
+    });
+
+
+    // =========================================================
+    // AUTOCOMPLETE DE CLIENTES
+    // =========================================================
+
+    inputBusca.addEventListener("input", () => {
+        const texto = inputBusca.value
+            .trim()
+            .toLowerCase();
+
+        listaSugestoes.innerHTML = "";
+
+        if (!texto) {
+            return;
+        }
+
+        const encontrados = todosClientes
+            .filter(c =>
+                c.cliente &&
+                c.cliente.toLowerCase().includes(texto) &&
+                !clientesDoBloco.includes(c.cliente)
+            )
+            .slice(0, 8);
+
+        encontrados.forEach(cliente => {
+            const item = document.createElement("div");
+
+            item.className = "autocomplete-item";
+            item.textContent = cliente.cliente;
+
+            item.addEventListener("click", () => {
+                clientesDoBloco.push(cliente.cliente);
+
+                renderizarChips();
+
+                inputBusca.value = "";
+                listaSugestoes.innerHTML = "";
+            });
+
+            listaSugestoes.appendChild(item);
+        });
+    });
+
+
+    // =========================================================
+    // FECHAR SUGESTÕES AO CLICAR FORA DO BLOCO
+    // =========================================================
+
+    document.addEventListener("click", (e) => {
+        if (!bloco.contains(e.target)) {
+            listaSugestoes.innerHTML = "";
+            listaEntregadores.innerHTML = "";
+        }
+    });
+
+
+    // =========================================================
+    // REMOVER BLOCO
+    // =========================================================
+
+    bloco
+        .querySelector(".btn-remover-bloco-rota")
+        .addEventListener("click", () => {
             bloco.remove();
         });
 
-        const inputBusca = bloco.querySelector(".input-buscar-cliente-rota");
-        const listaSugestoes = bloco.querySelector(".lista-sugestoes-rota");
 
-        inputBusca.addEventListener("input", () => {
-            const texto = inputBusca.value.trim().toLowerCase();
-            listaSugestoes.innerHTML = "";
+    // =========================================================
+    // EXPÕE OS CLIENTES ATUAIS PARA O SALVAMENTO
+    // =========================================================
 
-            if (!texto) return;
+    bloco.obterClientes = () => clientesDoBloco;
 
-            const encontrados = todosClientes
-                .filter(c => c.cliente.toLowerCase().includes(texto) && !clientesDoBloco.includes(c.cliente))
-                .slice(0, 8);
 
-            encontrados.forEach(c => {
-                const item = document.createElement("div");
-                item.className = "autocomplete-item";
-                item.textContent = c.cliente;
-                item.addEventListener("click", () => {
-                    clientesDoBloco.push(c.cliente);
-                    renderizarChips();
-                    inputBusca.value = "";
-                    listaSugestoes.innerHTML = "";
-                });
-                listaSugestoes.appendChild(item);
-            });
-        });
+    return bloco;
+}
 
-        document.addEventListener("click", (e) => {
-            if (!bloco.contains(e.target)) listaSugestoes.innerHTML = "";
-        });
 
-        // Expõe os clientes atuais do bloco pro momento de salvar
-        bloco.obterClientes = () => clientesDoBloco;
+// =============================================================
+// SALVAR PRÉ-TABELA DE ROTAS
+// =============================================================
 
-        return bloco;
-    }
+if (btnSalvarRotas) {
+    btnSalvarRotas.addEventListener("click", async () => {
 
-    if (btnSalvarRotas) {
-        btnSalvarRotas.addEventListener("click", async () => {
-            const data = dataPlanejamentoRotas.value;
-            if (!data) {
-                mostrarFeedbackRotas("Escolha a data da rota.", "erro");
-                return;
-            }
+        const data = dataPlanejamentoRotas.value;
 
-            const blocos = [...blocosEntregadoresRotas.querySelectorAll(".bloco-entregador-rota")];
-            const rotas = blocos.map(bloco => ({
-                entregador: bloco.querySelector(".input-nome-entregador-rota").value.trim(),
+        if (!data) {
+            mostrarFeedbackRotas(
+                "Escolha a data da rota.",
+                "erro"
+            );
+            return;
+        }
+
+
+        // -----------------------------------------------------
+        // PEGA TODOS OS BLOCOS
+        // -----------------------------------------------------
+
+        const blocos = [
+            ...blocosEntregadoresRotas.querySelectorAll(
+                ".bloco-entregador-rota"
+            )
+        ];
+
+
+        // -----------------------------------------------------
+        // MONTA AS ROTAS
+        // -----------------------------------------------------
+
+        const rotas = blocos
+            .map(bloco => ({
+                entregador: bloco
+                    .querySelector(".input-nome-entregador-rota")
+                    .value
+                    .trim(),
+
                 clientes: bloco.obterClientes()
-            })).filter(r => r.entregador && r.clientes.length > 0);
+            }))
+            .filter(
+                rota =>
+                    rota.entregador &&
+                    rota.clientes.length > 0
+            );
 
-            if (rotas.length === 0) {
-                mostrarFeedbackRotas("Adicione pelo menos um entregador com clientes.", "erro");
-                return;
-            }
 
-            btnSalvarRotas.disabled = true;
-            btnSalvarRotas.textContent = "Salvando...";
+        // -----------------------------------------------------
+        // VALIDAÇÃO
+        // -----------------------------------------------------
 
-            try {
-                const resposta = await fetchAutenticado("https://sos-alimentos-servidor.onrender.com/api/rotas-planejadas", {
+        if (rotas.length === 0) {
+            mostrarFeedbackRotas(
+                "Adicione pelo menos um entregador com clientes.",
+                "erro"
+            );
+            return;
+        }
+
+
+        // -----------------------------------------------------
+        // DESABILITA BOTÃO
+        // -----------------------------------------------------
+
+        btnSalvarRotas.disabled = true;
+        btnSalvarRotas.textContent = "Salvando...";
+
+
+        try {
+
+            // -------------------------------------------------
+            // ENVIA PARA O SERVIDOR
+            // -------------------------------------------------
+
+            const resposta = await fetchAutenticado(
+                "https://sos-alimentos-servidor.onrender.com/api/rotas-planejadas",
+                {
                     method: "POST",
-                    headers: { "Content-Type": "application/json" },
+
+                    headers: {
+                        "Content-Type": "application/json"
+                    },
+
                     credentials: "include",
-                    body: JSON.stringify({ data, rotas })
-                });
 
-                const respostaData = await resposta.json().catch(() => ({}));
+                    body: JSON.stringify({
+                        data,
+                        rotas
+                    })
+                }
+            );
 
-                if (resposta.ok) {
-                    mostrarFeedbackRotas("✅ Pré-tabela salva com sucesso!", "sucesso");
-                    // Se a data planejada é a mesma que está sendo vista no
-                    // faturamento, atualiza a tabela na hora
-                    if (data === filtroFaturamentoInicio && data === filtroFaturamentoFim) {
-                        montarResumoEListaFaturamento(document.getElementById("faturamentoConteudo"));
-                    }
-                    setTimeout(fecharModalPlanejarRotas, 1200);
-                } else {
-                    mostrarFeedbackRotas(respostaData.erro || "Erro ao salvar a pré-tabela.", "erro");
+
+            // -------------------------------------------------
+            // LÊ RESPOSTA
+            // -------------------------------------------------
+
+            const respostaData =
+                await resposta
+                    .json()
+                    .catch(() => ({}));
+
+
+            // -------------------------------------------------
+            // SUCESSO
+            // -------------------------------------------------
+
+            if (resposta.ok) {
+
+                mostrarFeedbackRotas(
+                    "✅ Pré-tabela salva com sucesso!",
+                    "sucesso"
+                );
+
+
+                // Se a data planejada é a mesma que está sendo
+                // visualizada no faturamento, atualiza a tabela.
+
+                if (
+                    data === filtroFaturamentoInicio &&
+                    data === filtroFaturamentoFim
+                ) {
+                    montarResumoEListaFaturamento(
+                        document.getElementById(
+                            "faturamentoConteudo"
+                        )
+                    );
                 }
 
-            } catch (erro) {
-                console.error(erro);
-                mostrarFeedbackRotas("A rota de planejamento ainda não existe no servidor — isso é esperado até criarmos ela.", "erro");
-            } finally {
-                btnSalvarRotas.disabled = false;
-                btnSalvarRotas.textContent = "Salvar Pré-Tabela";
-            }
-        });
-    }
 
+                setTimeout(
+                    fecharModalPlanejarRotas,
+                    1200
+                );
+
+            } else {
+
+                mostrarFeedbackRotas(
+                    respostaData.erro ||
+                    "Erro ao salvar a pré-tabela.",
+                    "erro"
+                );
+            }
+
+
+        } catch (erro) {
+
+            console.error(erro);
+
+            mostrarFeedbackRotas(
+                "Erro ao salvar a pré-tabela. Verifique se a rota do servidor está disponível.",
+                "erro"
+            );
+
+        } finally {
+
+            btnSalvarRotas.disabled = false;
+            btnSalvarRotas.textContent = "Salvar Pré-Tabela";
+        }
+    });
+}
 
     // Card só-leitura (sem ações) reaproveitando o mesmo visual das outras
     // listagens de nota do sistema.
