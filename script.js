@@ -2011,8 +2011,8 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     async function abrirModalPlanejarRotas() {
         await Promise.all([
-            carregarClientes();
-            carregarEntregadores();
+            carregarClientes(),
+            carregarEntregadores()
         ]);
         if (!modalPlanejarRotas) return;
 
