@@ -1204,8 +1204,10 @@ document.addEventListener("DOMContentLoaded", async () => {
     }
 
     // Exibicao dos clientes
-    btnPesquisarCliente.addEventListener("click", carregarClientes);
-
+    if(btnPesquisarCliente){
+        btnPesquisarCliente.addEventListener("click", carregarClientes);
+    }
+    
     function renderClientes(clientes) {
         clientesConteudo.innerHTML = "";
 
