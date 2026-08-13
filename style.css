@@ -433,6 +433,10 @@ section[hidden] {
     gap: 10px;
 }
 
+.modo-somente-visualizacao .modal-imagem-acoes {
+    display: none;
+}
+
 .modal-imagem-acoes .button,
 .modal-imagem-acoes .button-secundario {
     flex: 1;
@@ -812,6 +816,67 @@ input[type="file"] {
 /* ============================================================
    ABA NOTAS — agrupamento alfabético
    ============================================================ */
+
+.busca-cliente-notas {
+    margin-left: auto;
+    max-width: 260px;
+    font-family: var(--fonte-texto);
+    font-size: 13.5px;
+    padding: 9px 14px;
+    border-radius: var(--raio);
+    border: 1.5px solid var(--papel-sombra);
+    background: var(--branco);
+    color: var(--tinta);
+}
+
+.notas-layout {
+    display: flex;
+    gap: 18px;
+    align-items: flex-start;
+}
+
+.notas-az-index {
+    position: sticky;
+    top: 0;
+    flex-shrink: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    background: var(--branco);
+    border: 1px solid var(--papel-sombra);
+    border-radius: var(--raio);
+    padding: 8px 4px;
+    box-shadow: var(--sombra-card);
+}
+
+.notas-az-index-letra {
+    width: 24px;
+    text-align: center;
+    font-family: var(--fonte-utilitaria);
+    font-size: 11px;
+    font-weight: 700;
+    padding: 3px 0;
+    border-radius: 3px;
+    border: none;
+    background: transparent;
+    color: var(--folha);
+    cursor: pointer;
+}
+
+.notas-az-index-letra:hover {
+    background: var(--folha-clara);
+}
+
+.notas-az-index-letra--vazia {
+    color: var(--tinta-muted);
+    opacity: 0.4;
+    cursor: default;
+}
+
+.notas-coluna-conteudo {
+    flex: 1;
+    min-width: 0;
+}
 
 .notas-alfabetico-container {
     display: flex;
@@ -1400,12 +1465,46 @@ input[type="file"] {
     margin-bottom: 28px;
 }
 
+.tabela-entregadores-cabecalho {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 10px;
+    margin-bottom: 12px;
+}
+
 .tabela-entregadores-titulo {
     font-family: var(--fonte-display);
     font-weight: 600;
     font-size: 17px;
     color: var(--verde-mata);
-    margin: 0 0 12px;
+    margin: 0;
+}
+
+.tabela-entregadores-acoes {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+}
+
+.btn-exportar-secundario {
+    font-family: var(--fonte-texto);
+    font-weight: 600;
+    font-size: 13px;
+    padding: 8px 14px;
+    border-radius: var(--raio);
+    border: 1.5px solid var(--papel-sombra);
+    background: var(--branco);
+    color: var(--tinta-suave);
+    cursor: pointer;
+    transition: border-color 0.15s ease, color 0.15s ease, background 0.15s ease;
+}
+
+.btn-exportar-secundario:hover {
+    border-color: var(--folha);
+    color: var(--folha);
+    background: var(--folha-clara);
 }
 
 .tabela-entregadores-wrapper {
@@ -1448,17 +1547,54 @@ input[type="file"] {
     padding: 10px 16px;
     border-top: 1px solid var(--papel-sombra);
     vertical-align: top;
-    min-width: 160px;
+    min-width: 170px;
 }
 
 .tabela-entregadores tbody tr:hover td {
     background: var(--papel);
 }
 
+.tabela-entregadores td.entrega-pendente {
+    background: rgba(227, 162, 60, 0.08);
+}
+
+.entrega-status {
+    display: inline-block;
+    font-size: 11px;
+    margin-right: 4px;
+}
+
 .entrega-cliente {
-    display: block;
+    display: inline;
     color: var(--tinta);
     font-weight: 500;
+}
+
+.entrega-cliente--clicavel {
+    cursor: zoom-in;
+    text-decoration: underline;
+    text-decoration-color: var(--papel-sombra);
+    text-underline-offset: 2px;
+}
+
+.entrega-cliente--clicavel:hover {
+    color: var(--folha);
+    text-decoration-color: var(--folha);
+}
+
+.entrega-valor {
+    display: block;
+    font-family: var(--fonte-utilitaria);
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--dourado-escuro);
+    margin-top: 3px;
+}
+
+.entrega-pendente .entrega-valor {
+    color: var(--tinta-muted);
+    font-weight: 400;
+    font-style: italic;
 }
 
 .entrega-hora {
@@ -1467,6 +1603,98 @@ input[type="file"] {
     font-size: 11.5px;
     color: var(--tinta-muted);
     margin-top: 2px;
+}
+
+/* ---------- Planejar rotas (modal) ---------- */
+
+.modal-card-rotas {
+    max-width: 640px;
+}
+
+.blocos-entregadores-rotas {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    margin-bottom: 14px;
+}
+
+.bloco-entregador-rota {
+    border: 1.5px solid var(--papel-sombra);
+    border-radius: var(--raio);
+    padding: 14px;
+    background: var(--papel);
+}
+
+.bloco-entregador-rota-topo {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 10px;
+}
+
+.input-nome-entregador-rota {
+    flex: 1;
+    font-family: var(--fonte-texto);
+    font-size: 14px;
+    padding: 9px 12px;
+    border-radius: 4px;
+    border: 1.5px solid var(--papel-sombra);
+    background: var(--branco);
+    color: var(--tinta);
+}
+
+.btn-remover-bloco-rota {
+    flex-shrink: 0;
+    width: 38px;
+    border: 1.5px solid var(--papel-sombra);
+    border-radius: 4px;
+    background: var(--branco);
+    cursor: pointer;
+}
+
+.btn-remover-bloco-rota:hover {
+    border-color: var(--tomate);
+    background: var(--tomate-claro);
+}
+
+.bloco-entregador-rota-busca {
+    margin-bottom: 10px;
+}
+
+.bloco-entregador-rota-busca input {
+    font-size: 13.5px;
+    padding: 9px 12px;
+}
+
+.chips-clientes-rota {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+
+.chip-cliente-rota {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12.5px;
+    padding: 5px 6px 5px 10px;
+    border-radius: 20px;
+    background: var(--folha-clara);
+    color: var(--folha);
+    font-weight: 500;
+}
+
+.chip-cliente-rota-remover {
+    border: none;
+    background: transparent;
+    color: var(--folha);
+    font-size: 14px;
+    line-height: 1;
+    cursor: pointer;
+    padding: 0 2px;
+}
+
+.chip-cliente-rota-remover:hover {
+    color: var(--tomate);
 }
 
 /* ============================================================
@@ -1550,6 +1778,17 @@ input[type="file"] {
     main {
         margin-left: 0;
         padding: 24px 20px 48px;
+    }
+
+    .notas-layout {
+        flex-direction: column;
+    }
+
+    .notas-az-index {
+        position: static;
+        flex-direction: row;
+        flex-wrap: wrap;
+        width: 100%;
     }
 }
 
