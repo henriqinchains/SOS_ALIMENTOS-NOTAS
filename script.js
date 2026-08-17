@@ -43,6 +43,8 @@ const inputIdCliente = document.getElementById("idCliente");
 const inputEmailNota = document.getElementById("email");
 const inputNumeroNota = document.getElementById("numeroNota");
 const inputDataEmissao = document.getElementById("dataEmissao");
+const inputNotaJaPaga = document.getElementById("notaJaPaga");
+const btnNotaJaPaga = document.getElementById("btnNotaJaPaga");
 
 const listaClientes = document.getElementById("listaClientes");
 
@@ -50,6 +52,7 @@ let todosClientes = [];
 let todosEntregadores = [];
 
 let contadorNotasPorCliente = new Map(); // clienteId -> elemento <span> da contagem na aba Notas
+let notasLixeiraSelecionadas = new Set();
 
 // FATURAMENTO: filtro de período (default = dia atual, conforme pedido)
 let notasFaturamentoCache = [];
@@ -509,7 +512,7 @@ async function confirmarImportacaoCsv() {
 
     } catch (erro) {
         console.error(erro);
-        mostrarFeedbackCliente("A rota de importação em lote ainda não existe no servidor — isso é esperado até criarmos ela.", "erro");
+        mostrarFeedbackCliente("Não foi possível importar o CSV. Verifique sua conexão e tente novamente.", "erro");
     } finally {
         if (btnConfirmar) {
             btnConfirmar.disabled = false;
@@ -788,6 +791,12 @@ document.addEventListener("DOMContentLoaded", async () => {
             document.body.style.overflow = "hidden";
 
             formNota.reset();
+            if (inputNotaJaPaga && btnNotaJaPaga) {
+                inputNotaJaPaga.value = "false";
+                btnNotaJaPaga.setAttribute("aria-pressed", "false");
+                btnNotaJaPaga.classList.remove("ativo");
+                btnNotaJaPaga.textContent = "💰 Registrar como já paga";
+            }
             limparFeedbackNota();
 
             inputIdCliente.value = "";
@@ -932,6 +941,12 @@ document.addEventListener("DOMContentLoaded", async () => {
         formNota.reset();
         inputIdCliente.value = "";
         inputNumeroNota.value = "";
+        if (inputNotaJaPaga && btnNotaJaPaga) {
+            inputNotaJaPaga.value = "false";
+            btnNotaJaPaga.setAttribute("aria-pressed", "false");
+            btnNotaJaPaga.classList.remove("ativo");
+            btnNotaJaPaga.textContent = "💰 Registrar como já paga";
+        }
         limparFeedbackNota();
     }
 
@@ -963,6 +978,17 @@ document.addEventListener("DOMContentLoaded", async () => {
     });
 
 
+
+    // Botão de pagamento no cadastro de nota
+    if (btnNotaJaPaga && inputNotaJaPaga) {
+        btnNotaJaPaga.addEventListener("click", () => {
+            const ativo = inputNotaJaPaga.value === "true";
+            inputNotaJaPaga.value = ativo ? "false" : "true";
+            btnNotaJaPaga.setAttribute("aria-pressed", String(!ativo));
+            btnNotaJaPaga.classList.toggle("ativo", !ativo);
+            btnNotaJaPaga.textContent = !ativo ? "✅ Nota será registrada como paga" : "💰 Registrar como já paga";
+        });
+    }
 
     // Formulário Cliente
     if (formNovoCliente) {
@@ -1233,79 +1259,189 @@ document.addEventListener("DOMContentLoaded", async () => {
     function renderClientes(clientes) {
         clientesConteudo.innerHTML = "";
 
+        const listaBase = [...clientes];
+        const gruposAlfabeticos = {};
+        const normalizarTexto = (valor) => String(valor || "")
+            .normalize("NFD")
+            .replace(/[\u0300-\u036f]/g, "")
+            .toLowerCase();
+
         const toolbar = document.createElement("div");
         toolbar.classList.add("clientes-toolbar");
         toolbar.innerHTML = `
+            <h2>Clientes</h2>
+            <input type="text" id="buscaCliente" class="busca-cliente-notas" placeholder="🔍 Buscar cliente..." autocomplete="off">
             <select id="ordenarClientes">
-                <option value="">Ordenar</option>
                 <option value="nomeCre">Nome (A-Z)</option>
                 <option value="nomeDec">Nome (Z-A)</option>
                 <option value="id">ID</option>
             </select>
             <select id="filtrarClientes">
-                <option value="">Filtrar</option>
+                <option value="">Todos</option>
                 <option value="comCnpj">Com CNPJ</option>
                 <option value="semCnpj">Sem CNPJ</option>
             </select>
-            
             <button id="carregarClientes">🔄 Atualizar</button>
         `;
         clientesConteudo.appendChild(toolbar);
 
-        const ordenarClientes = toolbar.querySelector("#ordenarClientes");
-        const filtrarClientes = toolbar.querySelector("#filtrarClientes");
-        const btnCarregarClientes = toolbar.querySelector("#carregarClientes");
+        const area = document.createElement("div");
+        area.className = "clientes-listagem-layout";
+        clientesConteudo.appendChild(area);
 
-        btnCarregarClientes.addEventListener("click", carregarClientes);
+        const indiceAZ = document.createElement("nav");
+        indiceAZ.className = "notas-az-index clientes-az-index";
+        area.appendChild(indiceAZ);
 
-        ordenarClientes.addEventListener("change", (e) => {
-            let lista = [...todosClientes];
-            switch (e.target.value) {
-                case "nomeCre": lista.sort((a, b) => a.cliente.localeCompare(b.cliente)); break;
-                case "nomeDec": lista.sort((a, b) => b.cliente.localeCompare(a.cliente)); break;
-                case "id": lista.sort((a, b) => (a.id || "").localeCompare(b.id || "")); break;
+        const coluna = document.createElement("div");
+        coluna.className = "clientes-coluna-alfabetica";
+        area.appendChild(coluna);
+
+        const inputBusca = toolbar.querySelector("#buscaCliente");
+        const ordenar = toolbar.querySelector("#ordenarClientes");
+        const filtrar = toolbar.querySelector("#filtrarClientes");
+
+        function obterListaFiltrada() {
+            let lista = [...listaBase];
+            const termo = normalizarTexto(inputBusca.value.trim());
+
+            if (termo) {
+                lista = lista.filter(c => normalizarTexto(c.cliente).includes(termo));
             }
-            renderClientes(lista);
-        });
 
-        filtrarClientes.addEventListener("change", (e) => {
-            let lista = [...todosClientes];
-            if (e.target.value === "comCnpj") lista = lista.filter(c => c.cnpj);
-            if (e.target.value === "semCnpj") lista = lista.filter(c => !c.cnpj);
-            renderClientes(lista);
-        });
+            if (filtrar.value === "comCnpj") lista = lista.filter(c => c.cnpj);
+            if (filtrar.value === "semCnpj") lista = lista.filter(c => !c.cnpj);
 
-        if (clientes.length === 0) {
-            const aviso = document.createElement("p");
-            aviso.textContent = "Nenhum cliente encontrado.";
-            aviso.style.color = "#9ca3af";
-            aviso.style.padding = "20px";
-            clientesConteudo.appendChild(aviso);
-            return;
+            switch (ordenar.value) {
+                case "nomeDec":
+                    lista.sort((a, b) => String(b.cliente || "").localeCompare(String(a.cliente || ""), "pt-BR"));
+                    break;
+                case "id":
+                    lista.sort((a, b) => String(a.id ?? "").localeCompare(String(b.id ?? ""), "pt-BR", { numeric: true }));
+                    break;
+                default:
+                    lista.sort((a, b) => String(a.cliente || "").localeCompare(String(b.cliente || ""), "pt-BR"));
+            }
+            return lista;
         }
 
-        clientes.forEach(c => {
-            const cardCliente = document.createElement("div");
-            cardCliente.classList.add("cliente-card");
-            cardCliente.innerHTML = `
-            <div class="cliente-topo">
-            <h3>${c.cliente}</h3>
-            <span class="cliente-id">ID: ${c.id ?? "-"}</span>
-                </div>
-                <p class="cliente-rua">${c.endereco || "Rua não cadastrada"}</p>
-                <p class="cliente-bairro">${c.bairro || "Bairro não cadastrado"}</p>
-                <div class="cliente-acoes">
-                    <button class="btn-editar">Editar</button>
-                </div>
-            `;
-            clientesConteudo.appendChild(cardCliente);
+        function renderLista() {
+            const lista = obterListaFiltrada();
+            coluna.innerHTML = "";
+            indiceAZ.innerHTML = "";
 
-            cardCliente.querySelector(".btn-editar").addEventListener("click", () => {
-                abrirModalClienteParaEdicao(c);
+            lista.forEach(c => {
+                const letra = String(c.cliente || "").trim().charAt(0).toUpperCase();
+                if (!gruposAlfabeticos[letra]) gruposAlfabeticos[letra] = [];
             });
-        });
 
-        renderAbasNotas();
+            const grupos = {};
+            lista.forEach(c => {
+                const letra = String(c.cliente || "").trim().charAt(0).toUpperCase() || "#";
+                if (!grupos[letra]) grupos[letra] = [];
+                grupos[letra].push(c);
+            });
+
+            "ABCDEFGHIJKLMNOPQRSTUVWXYZ".split("").forEach(letra => {
+                const existe = Boolean(grupos[letra]);
+                const botao = document.createElement(existe ? "button" : "span");
+                botao.textContent = letra;
+                botao.className = "notas-az-index-letra" + (existe ? "" : " notas-az-index-letra--vazia");
+                if (existe) {
+                    botao.type = "button";
+                    botao.addEventListener("click", () => {
+                        document.getElementById(`clientes-letra-${letra}`)?.scrollIntoView({
+                            behavior: "smooth",
+                            block: "start"
+                        });
+                    });
+                }
+                indiceAZ.appendChild(botao);
+            });
+
+            const restantes = Object.keys(grupos).filter(l => !/^[A-Z]$/.test(l));
+            restantes.forEach(letra => {
+                const botao = document.createElement("span");
+                botao.textContent = letra;
+                botao.className = "notas-az-index-letra";
+                indiceAZ.appendChild(botao);
+            });
+
+            if (lista.length === 0) {
+                coluna.innerHTML = `<p class="sem-notas-txt">Nenhum cliente encontrado.</p>`;
+                return;
+            }
+
+            const letrasOrdenadas = Object.keys(grupos).sort((a, b) => a.localeCompare(b, "pt-BR"));
+            letrasOrdenadas.forEach(letra => {
+                const secao = document.createElement("section");
+                secao.className = "secao-letra-bloco clientes-secao-letra";
+                secao.id = `clientes-letra-${letra}`;
+
+                const titulo = document.createElement("h3");
+                titulo.className = "letra-divisor-titulo";
+                titulo.textContent = letra;
+                secao.appendChild(titulo);
+
+                const grid = document.createElement("div");
+                grid.className = "grid-clientes-nota";
+
+                grupos[letra].forEach(c => {
+                    const card = document.createElement("div");
+                    card.className = "cliente-card";
+                    card.innerHTML = `
+                        <div class="cliente-topo">
+                            <h3>${c.cliente || "Cliente"}</h3>
+                            <span class="cliente-id">ID: ${c.id ?? "-"}</span>
+                        </div>
+                        <p class="cliente-rua">${c.endereco || "Rua não cadastrada"}</p>
+                        <p class="cliente-bairro">${c.bairro || "Bairro não cadastrado"}</p>
+                        <div class="cliente-acoes">
+                            <button class="btn-editar" type="button">Editar</button>
+                            <button class="btn-excluir-cliente" type="button">🗑️ Excluir</button>
+                        </div>
+                    `;
+
+                    card.querySelector(".btn-editar").addEventListener("click", () => {
+                        abrirModalClienteParaEdicao(c);
+                    });
+
+                    card.querySelector(".btn-excluir-cliente").addEventListener("click", async () => {
+                        const confirmar = confirm(`Excluir o cliente "${c.cliente}"? Essa ação não pode ser desfeita.`);
+                        if (!confirmar) return;
+
+                        try {
+                            const resposta = await fetchAutenticado(
+                                `https://sos-alimentos-servidor.onrender.com/api/clientes/${c._id}`,
+                                { method: "DELETE", credentials: "include" }
+                            );
+                            const dados = await resposta.json().catch(() => ({}));
+
+                            if (!resposta.ok) {
+                                throw new Error(dados.erro || dados.error || "O servidor recusou a exclusão.");
+                            }
+
+                            await carregarClientes();
+                        } catch (erro) {
+                            console.error(erro);
+                            alert(erro.message || "Erro ao excluir cliente.");
+                        }
+                    });
+
+                    grid.appendChild(card);
+                });
+
+                secao.appendChild(grid);
+                coluna.appendChild(secao);
+            });
+        }
+
+        inputBusca.addEventListener("input", renderLista);
+        ordenar.addEventListener("change", renderLista);
+        filtrar.addEventListener("change", renderLista);
+        toolbar.querySelector("#carregarClientes").addEventListener("click", carregarClientes);
+
+        renderLista();
     }
 
     // ==========================================
@@ -1322,6 +1458,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         const notas = await respostaNotas.json();
 
         const quantidadeNotas = {};
+        const valorDevidoPorCliente = {};
 
         notas.forEach(nota => {
             // Mesmo critério usado em carregarNotasDoCliente: casa por nome do
@@ -1333,6 +1470,12 @@ document.addEventListener("DOMContentLoaded", async () => {
             if (!chave) return;
 
             quantidadeNotas[chave] = (quantidadeNotas[chave] || 0) + 1;
+
+            // O valor mostrado no card é somente o que ainda está pendente.
+            if (!nota.pago) {
+                valorDevidoPorCliente[chave] =
+                    (valorDevidoPorCliente[chave] || 0) + (parseFloat(nota.valor) || 0);
+            }
         });
 
         notasConteudo.innerHTML = "<p style='color:#9ca3af; padding:20px;'>Selecione um cliente para ver as notas.</p>";
@@ -1352,6 +1495,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         clientesOrdenados.forEach(cliente => {
             const chave = cliente.cliente.toLowerCase().trim();
             cliente.quantidadeNotas = quantidadeNotas[chave] || 0;
+            cliente.valorDevido = valorDevidoPorCliente[chave] || 0;
         });
 
         const gruposAlfabeticos = {};
@@ -1412,6 +1556,7 @@ document.addEventListener("DOMContentLoaded", async () => {
                             <span class="quantidade-notas">${cliente.quantidadeNotas > 0 ? `${cliente.quantidadeNotas} nota(s)` : "Cliente sem notas no momento."}</span>
                         </div>
                         <div class="cliente-info-grid">
+                        <span class="cliente-valor-devido"><strong>Deve:</strong> ${cliente.valorDevido.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}</span>
                         <span>${cliente.endereco ? `${cliente.endereco}` : 'Endereço não cadastrado'}</span>
                         <span>${cliente.bairro ? cliente.bairro : 'Bairro não cadastrado'}</span>
                             <span>${cliente.email ? `${cliente.email}` : 'E-mail não informado'}</span>
@@ -1503,18 +1648,84 @@ document.addEventListener("DOMContentLoaded", async () => {
         const lixeiraToolbar = document.getElementById("lixeiraToolbar");
         if (!lixeiraConteudo) return;
 
-        lixeiraConteudo.innerHTML = "<p style='color:#9ca3af; padding:20px;'>Carregando...</p>";
+        notasLixeiraSelecionadas.clear();
+        lixeiraConteudo.innerHTML = "<p class='loading-txt'>Carregando...</p>";
         if (lixeiraToolbar) lixeiraToolbar.innerHTML = "";
 
         try {
-            const resposta = await fetchAutenticado(`https://sos-alimentos-servidor.onrender.com/api/notas/lixeira?_=${Date.now()}`, { credentials: "include" });
+            const resposta = await fetchAutenticado(
+                `https://sos-alimentos-servidor.onrender.com/api/notas/lixeira?_=${Date.now()}`,
+                { credentials: "include" }
+            );
+            if (!resposta.ok) throw new Error("Não foi possível carregar a lixeira.");
             const notas = await resposta.json();
 
             if (lixeiraToolbar) {
                 const toolbar = document.createElement("div");
-                toolbar.classList.add("clientes-toolbar");
-                toolbar.innerHTML = `<h2 style="color: white; font-size: 20px; padding: 10px 0;">Notas Excluídas (${notas.length})</h2>`;
+                toolbar.classList.add("clientes-toolbar", "lixeira-toolbar");
+                toolbar.innerHTML = `
+                    <h2>Notas Excluídas (${notas.length})</h2>
+                    <button type="button" id="btnExcluirLixeiraSelecionadas" class="btn-perigo" disabled>
+                        🗑️ Excluir selecionadas (0)
+                    </button>
+                    <button type="button" id="btnSelecionarTodasLixeira" class="button-secundario">
+                        Selecionar todas
+                    </button>
+                `;
                 lixeiraToolbar.appendChild(toolbar);
+
+                const atualizarToolbar = () => {
+                    const total = notasLixeiraSelecionadas.size;
+                    const btn = toolbar.querySelector("#btnExcluirLixeiraSelecionadas");
+                    btn.disabled = total === 0;
+                    btn.textContent = `🗑️ Excluir selecionadas (${total})`;
+                };
+
+                toolbar.querySelector("#btnSelecionarTodasLixeira").addEventListener("click", () => {
+                    const todasSelecionadas = notasLixeiraSelecionadas.size === notas.length;
+                    notasLixeiraSelecionadas = todasSelecionadas
+                        ? new Set()
+                        : new Set(notas.map(n => String(n._id)));
+
+                    lixeiraConteudo.querySelectorAll(".check-lixeira-nota").forEach(check => {
+                        check.checked = notasLixeiraSelecionadas.has(check.dataset.id);
+                    });
+
+                    atualizarToolbar();
+                });
+
+                toolbar.querySelector("#btnExcluirLixeiraSelecionadas").addEventListener("click", async () => {
+                    const ids = [...notasLixeiraSelecionadas];
+                    if (!ids.length) return;
+
+                    if (!confirm(`Excluir definitivamente ${ids.length} nota(s) selecionada(s)? Essa ação não pode ser desfeita.`)) {
+                        return;
+                    }
+
+                    const btn = toolbar.querySelector("#btnExcluirLixeiraSelecionadas");
+                    btn.disabled = true;
+                    btn.textContent = "Excluindo...";
+
+                    try {
+                        const respostas = await Promise.all(
+                            ids.map(id => fetchAutenticado(
+                                `https://sos-alimentos-servidor.onrender.com/api/notas/${id}/permanente`,
+                                { method: "DELETE", credentials: "include" }
+                            ))
+                        );
+
+                        const falhas = respostas.filter(r => !r.ok);
+                        if (falhas.length) {
+                            throw new Error(`${falhas.length} nota(s) não puderam ser excluídas.`);
+                        }
+
+                        await renderLixeira();
+                    } catch (erro) {
+                        console.error(erro);
+                        alert(erro.message || "Erro ao excluir notas.");
+                        atualizarToolbar();
+                    }
+                });
             }
 
             lixeiraConteudo.innerHTML = "";
@@ -1533,35 +1744,55 @@ document.addEventListener("DOMContentLoaded", async () => {
 
             lixeiraConteudo.appendChild(grid);
 
+            const atualizarToolbar = () => {
+                const btn = document.getElementById("btnExcluirLixeiraSelecionadas");
+                if (!btn) return;
+                const total = notasLixeiraSelecionadas.size;
+                btn.disabled = total === 0;
+                btn.textContent = `🗑️ Excluir selecionadas (${total})`;
+            };
+
+            lixeiraConteudo.querySelectorAll(".check-lixeira-nota").forEach(check => {
+                check.addEventListener("change", () => {
+                    const id = String(check.dataset.id);
+                    if (check.checked) notasLixeiraSelecionadas.add(id);
+                    else notasLixeiraSelecionadas.delete(id);
+                    check.closest(".nota-lixeira-card")?.classList.toggle("selecionada", check.checked);
+                    atualizarToolbar();
+                });
+            });
         } catch (erro) {
             console.error(erro);
-            lixeiraConteudo.innerHTML = "<p class='erro-txt'>Erro ao carregar a lixeira.</p>";
+            lixeiraConteudo.innerHTML = `<p class='erro-txt'>${erro.message || "Erro ao carregar a lixeira."}</p>`;
         }
     }
 
-    // Cria o card de uma nota dentro da Lixeira, com botões de restaurar e excluir definitivamente
     function criarCardNotaLixeira(nota) {
         const card = document.createElement("div");
         card.classList.add("cliente-card", "nota-fiscal-card-ajuste", "nota-lixeira-card");
 
-        const valorFormatado = parseFloat(nota.valor || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+        const valorFormatado = parseFloat(nota.valor || 0).toLocaleString("pt-BR", {
+            style: "currency",
+            currency: "BRL"
+        });
 
-        let dataFormatada = 'Não informada';
+        let dataFormatada = "Não informada";
         if (nota.dataEmissao) {
-            const apenasData = nota.dataEmissao.split('T')[0];
-            const partes = apenasData.split('-');
-            if (partes.length === 3) {
-                dataFormatada = `${partes[2]}/${partes[1]}/${partes[0]}`;
-            }
+            const partes = nota.dataEmissao.split("T")[0].split("-");
+            if (partes.length === 3) dataFormatada = `${partes[2]}/${partes[1]}/${partes[0]}`;
         }
 
-        let deletadoFormatado = 'Não informada';
+        let deletadoFormatado = "Não informada";
         if (nota.deletadoEm) {
             const d = new Date(nota.deletadoEm);
-            if (!isNaN(d)) deletadoFormatado = d.toLocaleDateString('pt-BR');
+            if (!isNaN(d)) deletadoFormatado = d.toLocaleDateString("pt-BR");
         }
 
         card.innerHTML = `
+            <label class="lixeira-selecao">
+                <input type="checkbox" class="check-lixeira-nota" data-id="${nota._id}">
+                <span>Selecionar</span>
+            </label>
             <div class="cliente-topo">
                 <h3>${nota.cliente || "Cliente"} — Nota Nº ${nota.numeroNota || "-"}</h3>
                 <span class="nota-tag-valor">${valorFormatado}</span>
@@ -1569,7 +1800,7 @@ document.addEventListener("DOMContentLoaded", async () => {
             <p class="cliente-data"><strong>Emissão:</strong> ${dataFormatada}</p>
             <p class="cliente-excluida"><strong>Excluída em:</strong> ${deletadoFormatado}</p>
             <div class="nota-image">
-                <img src="${nota.img}" alt="Foto da nota">
+                <img src="${nota.img || ""}" alt="Foto da nota">
             </div>
             <div class="lixeira-card-acoes">
                 <button class="btn-restaurar-nota" type="button">♻️ Restaurar</button>
@@ -1578,45 +1809,35 @@ document.addEventListener("DOMContentLoaded", async () => {
         `;
 
         const imgNota = card.querySelector(".nota-image img");
-        imgNota.addEventListener("click", () => window.open(nota.img, "_blank"));
+        if (nota.img) imgNota.addEventListener("click", () => window.open(nota.img, "_blank"));
 
         card.querySelector(".btn-restaurar-nota").addEventListener("click", async () => {
-            const confirmar = confirm("Restaurar esta nota? Ela volta a aparecer normalmente.");
-            if (!confirmar) return;
-
+            if (!confirm("Restaurar esta nota? Ela volta a aparecer normalmente.")) return;
             try {
-                const resposta = await fetchAutenticado(`https://sos-alimentos-servidor.onrender.com/api/notas/${nota._id}/restaurar`, {
-                    method: "PUT",
-                    credentials: "include"
-                });
-
-                if (!resposta.ok) throw new Error();
-
+                const resposta = await fetchAutenticado(
+                    `https://sos-alimentos-servidor.onrender.com/api/notas/${nota._id}/restaurar`,
+                    { method: "PUT", credentials: "include" }
+                );
+                if (!resposta.ok) throw new Error("Erro ao restaurar nota.");
                 await renderLixeira();
-
             } catch (erro) {
                 console.error(erro);
-                alert("Erro ao restaurar nota.");
+                alert(erro.message || "Erro ao restaurar nota.");
             }
         });
 
         card.querySelector(".btn-excluir-permanente").addEventListener("click", async () => {
-            const confirmar = confirm("Excluir esta nota DEFINITIVAMENTE? Essa ação não pode ser desfeita.");
-            if (!confirmar) return;
-
+            if (!confirm("Excluir esta nota DEFINITIVAMENTE? Essa ação não pode ser desfeita.")) return;
             try {
-                const resposta = await fetchAutenticado(`https://sos-alimentos-servidor.onrender.com/api/notas/${nota._id}/permanente`, {
-                    method: "DELETE",
-                    credentials: "include"
-                });
-
-                if (!resposta.ok) throw new Error();
-
+                const resposta = await fetchAutenticado(
+                    `https://sos-alimentos-servidor.onrender.com/api/notas/${nota._id}/permanente`,
+                    { method: "DELETE", credentials: "include" }
+                );
+                if (!resposta.ok) throw new Error("Erro ao excluir nota permanentemente.");
                 await renderLixeira();
-
             } catch (erro) {
                 console.error(erro);
-                alert("Erro ao excluir nota permanentemente.");
+                alert(erro.message || "Erro ao excluir nota permanentemente.");
             }
         });
 
@@ -2134,7 +2355,9 @@ document.addEventListener("DOMContentLoaded", async () => {
         ".chips-clientes-rota"
     );
 
-    const clientesDoBloco = [...clientesIniciais];
+    const clientesDoBloco = [...clientesIniciais]
+        .map(c => typeof c === "string" ? c : (c?.cliente || c?.nome || ""))
+        .filter(Boolean);
 
 
     // =========================================================
@@ -2216,43 +2439,54 @@ document.addEventListener("DOMContentLoaded", async () => {
     // AUTOCOMPLETE DE CLIENTES
     // =========================================================
 
-    inputBusca.addEventListener("input", () => {
-        const texto = inputBusca.value
-            .trim()
-            .toLowerCase();
+    const normalizarBuscaRota = (valor) => String(valor || "")
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .toLowerCase()
+        .trim();
 
+    function atualizarSugestoesClientesRota() {
+        const texto = normalizarBuscaRota(inputBusca.value);
         listaSugestoes.innerHTML = "";
 
-        if (!texto) {
-            return;
-        }
+        const jaAdicionados = new Set(clientesDoBloco.map(normalizarBuscaRota));
 
         const encontrados = todosClientes
-            .filter(c =>
-                c.cliente &&
-                c.cliente.toLowerCase().includes(texto) &&
-                !clientesDoBloco.includes(c.cliente)
-            )
-            .slice(0, 8);
+            .filter(c => {
+                const nome = normalizarBuscaRota(c.cliente);
+                return nome &&
+                    !jaAdicionados.has(nome) &&
+                    (!texto || nome.includes(texto));
+            })
+            .sort((a, b) => String(a.cliente).localeCompare(String(b.cliente), "pt-BR"))
+            .slice(0, 12);
 
         encontrados.forEach(cliente => {
-            const item = document.createElement("div");
-
+            const item = document.createElement("button");
+            item.type = "button";
             item.className = "autocomplete-item";
             item.textContent = cliente.cliente;
 
+            item.addEventListener("mousedown", (e) => e.preventDefault());
             item.addEventListener("click", () => {
-                clientesDoBloco.push(cliente.cliente);
+                const nome = String(cliente.cliente || "").trim();
+                if (!nome || jaAdicionados.has(normalizarBuscaRota(nome))) return;
 
+                clientesDoBloco.push(nome);
                 renderizarChips();
-
                 inputBusca.value = "";
                 listaSugestoes.innerHTML = "";
+                inputBusca.focus();
             });
 
             listaSugestoes.appendChild(item);
         });
-    });
+
+        listaSugestoes.style.display = encontrados.length ? "block" : "none";
+    }
+
+    inputBusca.addEventListener("input", atualizarSugestoesClientesRota);
+    inputBusca.addEventListener("focus", atualizarSugestoesClientesRota);
 
 
     // =========================================================
