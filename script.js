@@ -1257,74 +1257,457 @@ document.addEventListener("DOMContentLoaded", async () => {
     }
     
     function renderClientes(clientes) {
-        clientesConteudo.innerHTML = "";
+    clientesConteudo.innerHTML = "";
 
-        const listaBase = [...clientes];
-        const gruposAlfabeticos = {};
-        const normalizarTexto = (valor) => String(valor || "")
+    const listaBase = [...clientes];
+
+    const normalizarTexto = (valor) =>
+        String(valor || "")
             .normalize("NFD")
             .replace(/[\u0300-\u036f]/g, "")
             .toLowerCase();
 
-        const toolbar = document.createElement("div");
-        toolbar.classList.add("clientes-toolbar");
-        toolbar.innerHTML = `
-            <h2>Clientes</h2>
-            <input type="text" id="buscaCliente" class="busca-cliente-notas" placeholder="🔍 Buscar cliente..." autocomplete="off">
-            <select id="ordenarClientes">
-                <option value="nomeCre">Nome (A-Z)</option>
-                <option value="nomeDec">Nome (Z-A)</option>
-                <option value="id">ID</option>
-            </select>
-            <select id="filtrarClientes">
-                <option value="">Todos</option>
-                <option value="comCnpj">Com CNPJ</option>
-                <option value="semCnpj">Sem CNPJ</option>
-            </select>
-            <button id="carregarClientes">🔄 Atualizar</button>
-        `;
-        clientesConteudo.appendChild(toolbar);
+    // ==========================
+    // BARRA DE FERRAMENTAS
+    // ==========================
 
-        const area = document.createElement("div");
-        area.className = "clientes-listagem-layout";
-        clientesConteudo.appendChild(area);
+    const toolbar = document.createElement("div");
+    toolbar.classList.add("clientes-toolbar");
 
-        const indiceAZ = document.createElement("nav");
-        indiceAZ.className = "notas-az-index clientes-az-index";
-        area.appendChild(indiceAZ);
+    toolbar.innerHTML = `
+        <h2>Clientes</h2>
 
-        const coluna = document.createElement("div");
-        coluna.className = "clientes-coluna-alfabetica";
-        area.appendChild(coluna);
+        <input
+            type="text"
+            id="buscaCliente"
+            class="busca-cliente-notas"
+            placeholder="🔍 Buscar cliente..."
+            autocomplete="off"
+        >
 
-        const inputBusca = toolbar.querySelector("#buscaCliente");
-        const ordenar = toolbar.querySelector("#ordenarClientes");
-        const filtrar = toolbar.querySelector("#filtrarClientes");
+        <select id="ordenarClientes">
+            <option value="nomeCre">Nome (A-Z)</option>
+            <option value="nomeDec">Nome (Z-A)</option>
+            <option value="id">ID</option>
+        </select>
 
-        function obterListaFiltrada() {
-            let lista = [...listaBase];
-            const termo = normalizarTexto(inputBusca.value.trim());
+        <select id="filtrarClientes">
+            <option value="">Todos</option>
+            <option value="comCnpj">Com CNPJ</option>
+            <option value="semCnpj">Sem CNPJ</option>
+        </select>
 
-            if (termo) {
-                lista = lista.filter(c => normalizarTexto(c.cliente).includes(termo));
-            }
+        <button id="carregarClientes">
+            🔄 Atualizar
+        </button>
+    `;
 
-            if (filtrar.value === "comCnpj") lista = lista.filter(c => c.cnpj);
-            if (filtrar.value === "semCnpj") lista = lista.filter(c => !c.cnpj);
+    clientesConteudo.appendChild(toolbar);
 
-            switch (ordenar.value) {
-                case "nomeDec":
-                    lista.sort((a, b) => String(b.cliente || "").localeCompare(String(a.cliente || ""), "pt-BR"));
-                    break;
-                case "id":
-                    lista.sort((a, b) => String(a.id ?? "").localeCompare(String(b.id ?? ""), "pt-BR", { numeric: true }));
-                    break;
-                default:
-                    lista.sort((a, b) => String(a.cliente || "").localeCompare(String(b.cliente || ""), "pt-BR"));
-            }
-            return lista;
+    // ==========================
+    // LAYOUT
+    // ==========================
+
+    const area = document.createElement("div");
+    area.className = "clientes-listagem-layout";
+
+    clientesConteudo.appendChild(area);
+
+    const indiceAZ = document.createElement("nav");
+    indiceAZ.className = "notas-az-index clientes-az-index";
+
+    area.appendChild(indiceAZ);
+
+    const coluna = document.createElement("div");
+    coluna.className = "clientes-coluna-alfabetica";
+
+    area.appendChild(coluna);
+
+    // ==========================
+    // ELEMENTOS
+    // ==========================
+
+    const inputBusca = toolbar.querySelector("#buscaCliente");
+    const ordenar = toolbar.querySelector("#ordenarClientes");
+    const filtrar = toolbar.querySelector("#filtrarClientes");
+    const btnAtualizar = toolbar.querySelector("#carregarClientes");
+
+    // ==========================
+    // FILTRAR / ORDENAR
+    // ==========================
+
+    function obterListaFiltrada() {
+
+        let lista = [...listaBase];
+
+        const termo = normalizarTexto(
+            inputBusca.value.trim()
+        );
+
+        if (termo) {
+            lista = lista.filter(cliente =>
+                normalizarTexto(cliente.cliente)
+                    .includes(termo)
+            );
         }
 
+        if (filtrar.value === "comCnpj") {
+            lista = lista.filter(cliente => cliente.cnpj);
+        }
+
+        if (filtrar.value === "semCnpj") {
+            lista = lista.filter(cliente => !cliente.cnpj);
+        }
+
+        if (ordenar.value === "nomeDec") {
+
+            lista.sort((a, b) =>
+                String(b.cliente || "").localeCompare(
+                    String(a.cliente || ""),
+                    "pt-BR"
+                )
+            );
+
+        } else if (ordenar.value === "id") {
+
+            lista.sort((a, b) =>
+                String(a.id ?? "").localeCompare(
+                    String(b.id ?? ""),
+                    "pt-BR",
+                    { numeric: true }
+                )
+            );
+
+        } else {
+
+            lista.sort((a, b) =>
+                String(a.cliente || "").localeCompare(
+                    String(b.cliente || ""),
+                    "pt-BR"
+                )
+            );
+        }
+
+        return lista;
+    }
+
+    // ==========================
+    // RENDERIZAR
+    // ==========================
+
+    function renderLista() {
+
+        const lista = obterListaFiltrada();
+
+        coluna.innerHTML = "";
+        indiceAZ.innerHTML = "";
+
+        if (lista.length === 0) {
+
+            coluna.innerHTML = `
+                <p class="sem-notas-txt">
+                    Nenhum cliente encontrado.
+                </p>
+            `;
+
+            return;
+        }
+
+        // ==========================
+        // AGRUPAR POR LETRA
+        // ==========================
+
+        const grupos = {};
+
+        lista.forEach(cliente => {
+
+            const nome = String(
+                cliente.cliente || ""
+            ).trim();
+
+            const letra =
+                normalizarTexto(nome)
+                    .charAt(0)
+                    .toUpperCase() || "#";
+
+            if (!grupos[letra]) {
+                grupos[letra] = [];
+            }
+
+            grupos[letra].push(cliente);
+        });
+
+        // ==========================
+        // ORDEM DOS GRUPOS
+        // ==========================
+
+        const letrasOrdenadas =
+            Object.keys(grupos).sort((a, b) => {
+
+                if (ordenar.value === "nomeDec") {
+                    return b.localeCompare(
+                        a,
+                        "pt-BR"
+                    );
+                }
+
+                return a.localeCompare(
+                    b,
+                    "pt-BR"
+                );
+            });
+
+        // ==========================
+        // BARRA A-Z / Z-A
+        // ==========================
+
+        let letrasIndice =
+            "ABCDEFGHIJKLMNOPQRSTUVWXYZ".split("");
+
+        if (ordenar.value === "nomeDec") {
+            letrasIndice.reverse();
+        }
+
+        letrasIndice.forEach(letra => {
+
+            const existe =
+                Boolean(grupos[letra]);
+
+            const elemento =
+                document.createElement(
+                    existe ? "button" : "span"
+                );
+
+            elemento.textContent = letra;
+
+            elemento.className =
+                "notas-az-index-letra" +
+                (
+                    existe
+                        ? ""
+                        : " notas-az-index-letra--vazia"
+                );
+
+            if (existe) {
+
+                elemento.type = "button";
+
+                elemento.addEventListener(
+                    "click",
+                    () => {
+
+                        const alvo =
+                            document.getElementById(
+                                `clientes-letra-${letra}`
+                            );
+
+                        if (alvo) {
+
+                            alvo.scrollIntoView({
+                                behavior: "smooth",
+                                block: "start"
+                            });
+                        }
+                    }
+                );
+            }
+
+            indiceAZ.appendChild(elemento);
+        });
+
+        // ==========================
+        // CARDS
+        // ==========================
+
+        letrasOrdenadas.forEach(letra => {
+
+            const secao =
+                document.createElement("section");
+
+            secao.className =
+                "secao-letra-bloco clientes-secao-letra";
+
+            secao.id =
+                `clientes-letra-${letra}`;
+
+            const titulo =
+                document.createElement("h3");
+
+            titulo.className =
+                "letra-divisor-titulo";
+
+            titulo.textContent = letra;
+
+            secao.appendChild(titulo);
+
+            // ESSENCIAL:
+            // os cards ficam dentro do GRID
+            const grid =
+                document.createElement("div");
+
+            grid.className =
+                "grid-clientes-nota";
+
+            grupos[letra].forEach(cliente => {
+
+                const card =
+                    document.createElement("div");
+
+                card.className =
+                    "cliente-card";
+
+                card.innerHTML = `
+                    <div class="cliente-topo">
+
+                        <h3>
+                            ${cliente.cliente || "Cliente"}
+                        </h3>
+
+                        <span class="cliente-id">
+                            ID: ${cliente.id ?? "-"}
+                        </span>
+
+                    </div>
+
+                    <p class="cliente-rua">
+                        ${cliente.endereco || "Rua não cadastrada"}
+                    </p>
+
+                    <p class="cliente-bairro">
+                        ${cliente.bairro || "Bairro não cadastrado"}
+                    </p>
+
+                    <div class="cliente-acoes">
+
+                        <button
+                            class="btn-editar"
+                            type="button"
+                        >
+                            Editar
+                        </button>
+
+                        <button
+                            class="btn-excluir-cliente"
+                            type="button"
+                        >
+                            🗑️ Excluir
+                        </button>
+
+                    </div>
+                `;
+
+                // EDITAR
+
+                const btnEditar =
+                    card.querySelector(
+                        ".btn-editar"
+                    );
+
+                btnEditar.addEventListener(
+                    "click",
+                    () => {
+                        abrirModalClienteParaEdicao(
+                            cliente
+                        );
+                    }
+                );
+
+                // EXCLUIR
+
+                const btnExcluir =
+                    card.querySelector(
+                        ".btn-excluir-cliente"
+                    );
+
+                btnExcluir.addEventListener(
+                    "click",
+                    async () => {
+
+                        const confirmar =
+                            confirm(
+                                `Excluir o cliente "${cliente.cliente}"? Essa ação não pode ser desfeita.`
+                            );
+
+                        if (!confirmar) return;
+
+                        try {
+
+                            const resposta =
+                                await fetchAutenticado(
+                                    `https://sos-alimentos-servidor.onrender.com/api/clientes/${cliente._id}`,
+                                    {
+                                        method: "DELETE",
+                                        credentials: "include"
+                                    }
+                                );
+
+                            const dados =
+                                await resposta
+                                    .json()
+                                    .catch(() => ({}));
+
+                            if (!resposta.ok) {
+
+                                throw new Error(
+                                    dados.erro ||
+                                    dados.error ||
+                                    "O servidor recusou a exclusão."
+                                );
+                            }
+
+                            await carregarClientes();
+
+                        } catch (erro) {
+
+                            console.error(
+                                "Erro ao excluir cliente:",
+                                erro
+                            );
+
+                            alert(
+                                erro.message ||
+                                "Erro ao excluir cliente."
+                            );
+                        }
+                    }
+                );
+
+                // COLOCA O CARD NO GRID
+                grid.appendChild(card);
+            });
+
+            secao.appendChild(grid);
+            coluna.appendChild(secao);
+        });
+    }
+
+    // ==========================
+    // EVENTOS
+    // ==========================
+
+    inputBusca.addEventListener(
+        "input",
+        renderLista
+    );
+
+    ordenar.addEventListener(
+        "change",
+        renderLista
+    );
+
+    filtrar.addEventListener(
+        "change",
+        renderLista
+    );
+
+    btnAtualizar.addEventListener(
+        "click",
+        carregarClientes
+    );
+
+    // PRIMEIRA RENDERIZAÇÃO
+    renderLista();
+}
 
             
 
