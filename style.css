@@ -1804,3 +1804,173 @@ input[type="file"] {
         padding: 32px 22px 26px;
     }
 }
+
+
+/* ============================================================
+   AJUSTES 2026-08 — pesquisa fixa, clientes A-Z, pagamentos
+   ============================================================ */
+
+#notasToolbar {
+    position: sticky;
+    top: -36px;
+    z-index: 40;
+    padding: 0 0 12px;
+    margin-bottom: 8px;
+    background: var(--papel);
+}
+
+#notasToolbar .clientes-toolbar {
+    margin: 0;
+    padding: 10px 0;
+}
+
+#notasToolbar .busca-cliente-notas {
+    min-width: 260px;
+}
+
+.clientes-listagem-layout {
+    display: flex;
+    gap: 18px;
+    align-items: flex-start;
+}
+
+.clientes-az-index {
+    position: sticky;
+    top: 12px;
+}
+
+.clientes-coluna-alfabetica {
+    flex: 1;
+    min-width: 0;
+}
+
+.clientes-secao-letra {
+    scroll-margin-top: 80px;
+    margin-bottom: 28px;
+}
+
+.clientes-secao-letra .grid-clientes-nota {
+    grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+}
+
+.cliente-valor-devido {
+    color: var(--tomate);
+    font-weight: 600;
+}
+
+.cliente-acoes {
+    display: flex;
+    gap: 8px;
+    margin-top: 10px;
+}
+
+.btn-excluir-cliente,
+.btn-perigo {
+    border: 1px solid rgba(193, 68, 46, .35);
+    background: var(--tomate-claro);
+    color: var(--tomate);
+    border-radius: var(--raio);
+    padding: 9px 12px;
+    font-weight: 600;
+}
+
+.btn-excluir-cliente:hover,
+.btn-perigo:hover {
+    background: var(--tomate);
+    color: var(--branco);
+}
+
+.campo-checkbox-pagamento {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    width: fit-content;
+    margin: 12px 0 16px;
+    padding: 10px 12px;
+    border: 1px solid var(--papel-sombra);
+    border-radius: var(--raio);
+    background: rgba(220, 235, 218, .45);
+    cursor: pointer;
+    font-weight: 600;
+}
+
+.campo-checkbox-pagamento input {
+    width: 17px;
+    height: 17px;
+    accent-color: var(--folha);
+}
+
+.lixeira-selecao {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    width: fit-content;
+    margin-bottom: 10px;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--tinta-suave);
+    cursor: pointer;
+}
+
+.check-lixeira-nota {
+    width: 17px;
+    height: 17px;
+    accent-color: var(--tomate);
+}
+
+.nota-lixeira-card.selecionada {
+    outline: 2px solid var(--tomate);
+    outline-offset: 2px;
+}
+
+.lixeira-toolbar {
+    position: sticky;
+    top: -36px;
+    z-index: 30;
+    padding: 10px 0;
+    background: var(--papel);
+}
+
+.lixeira-toolbar button:disabled {
+    opacity: .45;
+    cursor: not-allowed;
+}
+
+@media (max-width: 900px) {
+    #notasToolbar {
+        top: -24px;
+    }
+
+    .clientes-listagem-layout {
+        flex-direction: column;
+    }
+
+    .clientes-az-index {
+        position: sticky;
+        top: 0;
+        width: 100%;
+        flex-direction: row;
+        flex-wrap: wrap;
+    }
+}
+
+.btn-toggle-pagamento {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    width: 100%;
+    margin: 4px 0 16px;
+    padding: 11px 14px;
+    border: 1.5px solid var(--folha);
+    border-radius: var(--raio);
+    background: var(--folha-clara);
+    color: var(--folha);
+    font-weight: 600;
+}
+
+.btn-toggle-pagamento:hover,
+.btn-toggle-pagamento.ativo {
+    background: var(--folha);
+    color: var(--branco);
+}
