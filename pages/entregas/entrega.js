@@ -4,6 +4,8 @@ const formEntrega = document.getElementById("form-entrega");
 const inputCliente = document.getElementById("cliente");
 const inputValor = document.getElementById("valorNota");
 const inputImagem = document.getElementById("imagemNota");
+const inputNotaJaPaga = document.getElementById("notaJaPagaEntrega");
+const btnNotaJaPaga = document.getElementById("btnNotaJaPagaEntrega");
 const nomeArquivo = document.getElementById("nomeArquivo");
 const listaClientes = document.getElementById("lista-clientes");
 const feedback = document.getElementById("feedback");
@@ -170,7 +172,7 @@ async function enviarNotaServidor(nota, idLocal) {
     formData.append("numeroNota", nota.numeroNota);
     formData.append("valor", nota.valor);
     formData.append("dataEmissao", nota.dataEmissao);
-    formData.append("pago", false);
+    formData.append("pago", Boolean(nota.pago));
     formData.append("enviado", false);
     formData.append("img", nota.img);
 
@@ -198,6 +200,19 @@ async function enviarNotaServidor(nota, idLocal) {
 }
 
 // =========================
+// Marcar nota como já paga
+// =========================
+if (btnNotaJaPaga && inputNotaJaPaga) {
+    btnNotaJaPaga.addEventListener("click", () => {
+        const ativo = inputNotaJaPaga.value === "true";
+        inputNotaJaPaga.value = ativo ? "false" : "true";
+        btnNotaJaPaga.setAttribute("aria-pressed", String(!ativo));
+        btnNotaJaPaga.classList.toggle("ativo", !ativo);
+        btnNotaJaPaga.textContent = !ativo ? "✅ Nota será registrada como paga" : "💰 Registrar como já paga";
+    });
+}
+
+// =========================
 // Submit do formulário
 // =========================
 formEntrega.addEventListener("submit", async (e) => {
@@ -222,6 +237,7 @@ formEntrega.addEventListener("submit", async (e) => {
         valor: inputValor.value,
         dataEmissao: new Date().toISOString(),
         img: inputImagem.files[0],
+        pago: inputNotaJaPaga?.value === "true",
         status: "pendente"
     };
 
@@ -232,6 +248,12 @@ formEntrega.addEventListener("submit", async (e) => {
 
     formEntrega.reset();
     nomeArquivo.textContent = "Nenhum arquivo selecionado";
+    if (inputNotaJaPaga && btnNotaJaPaga) {
+        inputNotaJaPaga.value = "false";
+        btnNotaJaPaga.setAttribute("aria-pressed", "false");
+        btnNotaJaPaga.classList.remove("ativo");
+        btnNotaJaPaga.textContent = "💰 Registrar como já paga";
+    }
     clienteSelecionado = null;
     numeroNota = 1;
 });
