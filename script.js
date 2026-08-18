@@ -2726,9 +2726,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     // =========================================================
 
     inputEntregador.addEventListener("input", () => {
-        const texto = inputEntregador.value
-            .trim()
-            .toLowerCase();
+        const texto = inputEntregador.value;
 
         listaEntregadores.innerHTML = "";
         listaEntregadores.classList.remove("active");
