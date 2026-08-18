@@ -232,9 +232,9 @@ formEntrega.addEventListener("submit", async (e) => {
     const nota = {
         idLocal,
         idCliente: clienteSelecionado._id,
-        cliente: clienteSelecionado.cliente,
+        cliente: clienteSelecionado.cliente.trim(),
         numeroNota,
-        valor: inputValor.value,
+        valor: inputValor.value.trim(),
         dataEmissao: new Date().toISOString(),
         img: inputImagem.files[0],
         pago: inputNotaJaPaga?.value === "true",
