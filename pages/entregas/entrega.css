@@ -337,6 +337,46 @@ input[type="number"]::-webkit-outer-spin-button {
     color: var(--folha);
 }
 
+/* ---------- Toggle "já paga" ---------- */
+
+.btn-toggle-pagamento {
+    margin-top: 22px;
+    width: 100%;
+    font-family: var(--fonte-texto);
+    font-weight: 600;
+    font-size: 14px;
+    padding: 13px 16px;
+    border: 1.5px dashed var(--tinta-suave);
+    border-radius: 3px;
+    background: var(--papel-sombra);
+    color: var(--tinta-suave);
+    cursor: pointer;
+    transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+}
+
+.btn-toggle-pagamento:hover {
+    border-color: var(--folha);
+    color: var(--folha);
+}
+
+.btn-toggle-pagamento.ativo {
+    border: 1.5px solid var(--folha);
+    background: rgba(76, 122, 74, 0.12);
+    color: var(--folha);
+}
+
+.btn-toggle-pagamento:focus-visible {
+    outline: 2px solid var(--folha);
+    outline-offset: 2px;
+}
+
+.ajuda-toggle-pagamento {
+    margin: 8px 0 0;
+    font-size: 12px;
+    line-height: 1.4;
+    color: var(--tinta-suave);
+}
+
 /* ---------- Botão de envio ---------- */
 
 button#btnEnviar {
