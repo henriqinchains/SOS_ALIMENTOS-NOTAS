@@ -804,6 +804,17 @@ document.addEventListener("DOMContentLoaded", async () => {
             inputEmailNota.value = "";
             inputDataEmissao.value = new Date().toISOString().split("T")[0];
 
+            const campoEntregadorNota = document.getElementById("campoEntregadorNota");
+            const inputEntregadorNota = document.getElementById("entregadorNota");
+            if (campoEntregadorNota) {
+                const podeEscolherEntregador = userRole === "admin" || userRole === "financeiro";
+                campoEntregadorNota.hidden = !podeEscolherEntregador;
+                if (podeEscolherEntregador) {
+                    if (inputEntregadorNota) inputEntregadorNota.value = "";
+                    if (todosEntregadores.length === 0) carregarEntregadores();
+                }
+            }
+
             mostrarSugestoes("");
             inputClienteNota.focus();
         });
@@ -1075,6 +1086,15 @@ document.addEventListener("DOMContentLoaded", async () => {
             const formData = new FormData(formNota);
             const dados = Object.fromEntries(formData);
 
+            // Só sobrescreve o entregador se o admin/financeiro realmente
+            // escolheu alguém — vazio = registra no nome de quem está logado
+            const entregadorEscolhido = (dados.entregadorSelecionado || "").trim();
+            if (entregadorEscolhido) {
+                formData.set("entregadorSelecionado", entregadorEscolhido);
+            } else {
+                formData.delete("entregadorSelecionado");
+            }
+
             if (!dados.idCliente) {
                 mostrarFeedbackNota("⚠️ Por favor, selecione um cliente da lista sugerida para vincular a nota!", "erro");
                 inputClienteNota.focus();
@@ -1144,6 +1164,45 @@ document.addEventListener("DOMContentLoaded", async () => {
         todosEntregadores = [];
     }
 }
+
+    // Autocomplete do campo "registrar em nome de" (admin/financeiro), na nota
+    const inputEntregadorNota = document.getElementById("entregadorNota");
+    const listaEntregadoresNota = document.getElementById("listaEntregadoresNota");
+
+    if (inputEntregadorNota && listaEntregadoresNota) {
+        inputEntregadorNota.addEventListener("input", () => {
+            const texto = inputEntregadorNota.value.trim().toLowerCase();
+            listaEntregadoresNota.innerHTML = "";
+            listaEntregadoresNota.classList.remove("active");
+
+            if (!texto) return;
+
+            const encontrados = todosEntregadores
+                .filter(en => en.nome && en.nome.toLowerCase().includes(texto))
+                .slice(0, 8);
+
+            encontrados.forEach(entregador => {
+                const item = document.createElement("div");
+                item.className = "autocomplete-item";
+                item.textContent = entregador.nome;
+                item.addEventListener("click", () => {
+                    inputEntregadorNota.value = entregador.nome;
+                    listaEntregadoresNota.innerHTML = "";
+                    listaEntregadoresNota.classList.remove("active");
+                });
+                listaEntregadoresNota.appendChild(item);
+            });
+
+            if (encontrados.length > 0) listaEntregadoresNota.classList.add("active");
+        });
+
+        document.addEventListener("click", (e) => {
+            if (!e.target.closest("#campoEntregadorNota")) {
+                listaEntregadoresNota.innerHTML = "";
+                listaEntregadoresNota.classList.remove("active");
+            }
+        });
+    }
 
     // Carregar clientes pra exibição
     async function carregarClientes() {
@@ -2391,16 +2450,14 @@ document.addEventListener("DOMContentLoaded", async () => {
             return;
         }
 
-        // Ordena só a parte "confirmada" por horário — clientes planejados
-        // ainda pendentes mantêm a ordem da rota (não têm horário pra ordenar).
-        porEntregador.forEach(lista => {
-            const planejadosPendentes = lista.filter(item => !item.confirmado);
-            const resto = lista.filter(item => item.confirmado).sort((a, b) => a.timestamp - b.timestamp);
-            // Se veio de uma rota planejada, mantém pendentes na posição deles;
-            // senão (sem planejamento), é só a lista real ordenada por horário.
-            if (planejadosPendentes.length > 0) return; // já está na ordem certa (listaPlanejada + extras)
-            lista.length = 0;
-            lista.push(...resto);
+        // Ordem da tabela: entregador com rota planejada SEMPRE mantém a
+        // ordem em que os clientes foram adicionados na rota (nunca reordena
+        // por horário, nem depois de todos confirmados). Só entregador SEM
+        // rota nenhuma cai pra ordem cronológica de entrega.
+        const entregadoresComRota = new Set(rotasPlanejadas.map(r => r.entregador));
+        porEntregador.forEach((lista, nome) => {
+            if (entregadoresComRota.has(nome)) return; // mantém a ordem da rota
+            lista.sort((a, b) => a.timestamp - b.timestamp);
         });
 
         const entregadores = [...porEntregador.keys()].sort((a, b) => a.localeCompare(b));
@@ -2674,6 +2731,7 @@ document.addEventListener("DOMContentLoaded", async () => {
             .toLowerCase();
 
         listaEntregadores.innerHTML = "";
+        listaEntregadores.classList.remove("active");
 
         if (!texto) {
             return;
@@ -2695,10 +2753,15 @@ document.addEventListener("DOMContentLoaded", async () => {
             item.addEventListener("click", () => {
                 inputEntregador.value = entregador.nome;
                 listaEntregadores.innerHTML = "";
+                listaEntregadores.classList.remove("active");
             });
 
             listaEntregadores.appendChild(item);
         });
+
+        if (encontrados.length > 0) {
+            listaEntregadores.classList.add("active");
+        }
     });
 
 
@@ -2712,48 +2775,101 @@ document.addEventListener("DOMContentLoaded", async () => {
         .toLowerCase()
         .trim();
 
+    // Nomes de clientes digitados manualmente (não cadastrados ainda) —
+    // persistidos localmente pra continuar aparecendo no autocomplete depois.
+    function obterNomesExtrasClientesRota() {
+        try {
+            return JSON.parse(localStorage.getItem("extrasClientesRotas") || "[]");
+        } catch {
+            return [];
+        }
+    }
+
+    function persistirNomeExtraClienteRota(nome) {
+        const jaConhecido = todosClientes.some(c => normalizarBuscaRota(c.cliente) === normalizarBuscaRota(nome));
+        if (jaConhecido) return;
+
+        const extras = obterNomesExtrasClientesRota();
+        if (!extras.some(n => normalizarBuscaRota(n) === normalizarBuscaRota(nome))) {
+            extras.push(nome);
+            localStorage.setItem("extrasClientesRotas", JSON.stringify(extras));
+        }
+    }
+
+    function adicionarClienteAoBloco(nome) {
+        const nomeLimpo = String(nome || "").trim();
+        if (!nomeLimpo) return;
+        if (clientesDoBloco.some(c => normalizarBuscaRota(c) === normalizarBuscaRota(nomeLimpo))) return;
+
+        clientesDoBloco.push(nomeLimpo);
+        persistirNomeExtraClienteRota(nomeLimpo);
+        renderizarChips();
+        inputBusca.value = "";
+        listaSugestoes.innerHTML = "";
+        listaSugestoes.style.display = "none";
+        inputBusca.focus();
+    }
+
     function atualizarSugestoesClientesRota() {
         const texto = normalizarBuscaRota(inputBusca.value);
         listaSugestoes.innerHTML = "";
 
         const jaAdicionados = new Set(clientesDoBloco.map(normalizarBuscaRota));
 
-        const encontrados = todosClientes
-            .filter(c => {
-                const nome = normalizarBuscaRota(c.cliente);
+        const nomesConhecidos = [
+            ...todosClientes.map(c => c.cliente),
+            ...obterNomesExtrasClientesRota()
+        ];
+        const nomesUnicos = [...new Map(nomesConhecidos.map(n => [normalizarBuscaRota(n), n])).values()];
+
+        const encontrados = nomesUnicos
+            .filter(nomeCliente => {
+                const nome = normalizarBuscaRota(nomeCliente);
                 return nome &&
                     !jaAdicionados.has(nome) &&
                     (!texto || nome.includes(texto));
             })
-            .sort((a, b) => String(a.cliente).localeCompare(String(b.cliente), "pt-BR"))
+            .sort((a, b) => String(a).localeCompare(String(b), "pt-BR"))
             .slice(0, 12);
 
-        encontrados.forEach(cliente => {
+        encontrados.forEach(nomeCliente => {
             const item = document.createElement("button");
             item.type = "button";
             item.className = "autocomplete-item";
-            item.textContent = cliente.cliente;
+            item.textContent = nomeCliente;
 
             item.addEventListener("mousedown", (e) => e.preventDefault());
-            item.addEventListener("click", () => {
-                const nome = String(cliente.cliente || "").trim();
-                if (!nome || jaAdicionados.has(normalizarBuscaRota(nome))) return;
-
-                clientesDoBloco.push(nome);
-                renderizarChips();
-                inputBusca.value = "";
-                listaSugestoes.innerHTML = "";
-                inputBusca.focus();
-            });
+            item.addEventListener("click", () => adicionarClienteAoBloco(nomeCliente));
 
             listaSugestoes.appendChild(item);
         });
 
-        listaSugestoes.style.display = encontrados.length ? "block" : "none";
+        // Nome digitado não bate com nenhum conhecido — oferece adicionar como novo
+        const textoOriginal = inputBusca.value.trim();
+        if (textoOriginal && !nomesUnicos.some(n => normalizarBuscaRota(n) === normalizarBuscaRota(textoOriginal))) {
+            const itemNovo = document.createElement("button");
+            itemNovo.type = "button";
+            itemNovo.className = "autocomplete-item autocomplete-item--novo";
+            itemNovo.textContent = `+ Adicionar "${textoOriginal}" como novo cliente`;
+
+            itemNovo.addEventListener("mousedown", (e) => e.preventDefault());
+            itemNovo.addEventListener("click", () => adicionarClienteAoBloco(textoOriginal));
+
+            listaSugestoes.appendChild(itemNovo);
+        }
+
+        listaSugestoes.style.display = listaSugestoes.children.length ? "block" : "none";
     }
 
     inputBusca.addEventListener("input", atualizarSugestoesClientesRota);
     inputBusca.addEventListener("focus", atualizarSugestoesClientesRota);
+
+    inputBusca.addEventListener("keydown", (e) => {
+        if (e.key === "Enter") {
+            e.preventDefault();
+            adicionarClienteAoBloco(inputBusca.value);
+        }
+    });
 
 
     // =========================================================
@@ -2763,7 +2879,9 @@ document.addEventListener("DOMContentLoaded", async () => {
     document.addEventListener("click", (e) => {
         if (!bloco.contains(e.target)) {
             listaSugestoes.innerHTML = "";
+            listaSugestoes.style.display = "none";
             listaEntregadores.innerHTML = "";
+            listaEntregadores.classList.remove("active");
         }
     });
 
