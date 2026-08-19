@@ -51,6 +51,28 @@ const listaClientes = document.getElementById("listaClientes");
 let todosClientes = [];
 let todosEntregadores = [];
 
+// Retorna o nome legível do entregador com compatibilidade para notas antigas
+function obterNomeEntregador(nota) {
+    if (!nota) return "Não informado";
+
+    // Se o campo entregador for uma string (notas antigas ou já populadas), retorna direto
+    if (typeof nota.entregador === 'string' && nota.entregador.trim()) return nota.entregador;
+
+    // Se o campo entregador for um objeto populado pelo backend, tenta extrair o nome
+    if (typeof nota.entregador === 'object' && nota.entregador !== null) {
+        return nota.entregador.nome || nota.entregador.name || nota.entregador.usuario || "Não informado";
+    }
+
+    // Se tiver apenas entregadorId, tenta achar nos entregadores carregados no frontend
+    const id = nota.entregadorId || nota.entregador_id || nota.entregadorId === 0 ? nota.entregadorId : null;
+    if (id && Array.isArray(todosEntregadores)) {
+        const encontrado = todosEntregadores.find(e => String(e._id || e.id) === String(id));
+        if (encontrado) return encontrado.nome || encontrado.name || encontrado.usuario || "Não informado";
+    }
+
+    return "Não informado";
+}
+
 let contadorNotasPorCliente = new Map(); // clienteId -> elemento <span> da contagem na aba Notas
 let notasLixeiraSelecionadas = new Set();
 
@@ -802,7 +824,7 @@ document.addEventListener("DOMContentLoaded", async () => {
             inputIdCliente.value = "";
             inputNumeroNota.value = "";
             inputEmailNota.value = "";
-            inputDataEmissao.value = new Date().toISOString().split("T")[0];
+            inputDataEmissao.value = obterDataLocalISO(new Date());
 
             const campoEntregadorNota = document.getElementById("campoEntregadorNota");
             const inputEntregadorNota = document.getElementById("entregadorNota");
@@ -958,6 +980,11 @@ document.addEventListener("DOMContentLoaded", async () => {
             btnNotaJaPaga.classList.remove("ativo");
             btnNotaJaPaga.textContent = "💰 Registrar como já paga";
         }
+        // Garantir limpeza explícita dos campos de entregador (visível + hidden id)
+        const inputEntregadorNota = document.getElementById('entregadorNota');
+        const inputEntregadorNotaId = document.getElementById('entregadorSelecionadoId');
+        if (inputEntregadorNota) inputEntregadorNota.value = "";
+        if (inputEntregadorNotaId) inputEntregadorNotaId.value = "";
         limparFeedbackNota();
     }
 
@@ -1086,13 +1113,21 @@ document.addEventListener("DOMContentLoaded", async () => {
             const formData = new FormData(formNota);
             const dados = Object.fromEntries(formData);
 
-            // Só sobrescreve o entregador se o admin/financeiro realmente
-            // escolheu alguém — vazio = registra no nome de quem está logado
-            const entregadorEscolhido = (dados.entregadorSelecionado || "").trim();
-            if (entregadorEscolhido) {
-                formData.set("entregadorSelecionado", entregadorEscolhido);
+            // Prioriza o id do entregador selecionado (mais confiável).
+            // Mantém também o nome para exibição quando necessário.
+            const entregadorIdSelecionado = document.getElementById('entregadorSelecionadoId')?.value || "";
+            const entregadorNomeSelecionado = (dados.entregadorSelecionado || "").trim();
+
+            if (entregadorIdSelecionado) {
+                formData.set('entregadorId', entregadorIdSelecionado);
+                if (entregadorNomeSelecionado) formData.set('entregador', entregadorNomeSelecionado);
+            } else if (entregadorNomeSelecionado) {
+                // fallback: enviar apenas o nome se o admin digitou manualmente
+                formData.set('entregador', entregadorNomeSelecionado);
             } else {
-                formData.delete("entregadorSelecionado");
+                // nada selecionado: não enviar campos (backend usa o usuário autenticado)
+                formData.delete('entregador');
+                formData.delete('entregadorId');
             }
 
             if (!dados.idCliente) {
@@ -1119,10 +1154,13 @@ document.addEventListener("DOMContentLoaded", async () => {
                     // Atualiza a listagem dinamicamente
                     renderAbasNotas();
 
-                    // CORREÇÃO: antes o modal fechava na mesma hora que a mensagem
-                    // de sucesso era exibida, então ela nunca chegava a aparecer pro
-                    // usuário. Agora esperamos um instante — dá tempo da pessoa ver
-                    // a confirmação antes do modal sumir da tela.
+                    // Garantir que o campo visível e o hidden id do entregador sejam limpos
+                    const inputEntregadorNota = document.getElementById('entregadorNota');
+                    const inputEntregadorNotaId = document.getElementById('entregadorSelecionadoId');
+                    if (inputEntregadorNota) inputEntregadorNota.value = "";
+                    if (inputEntregadorNotaId) inputEntregadorNotaId.value = "";
+
+                    // Comportamento padrão: fechar após breve confirmação
                     btnSubmitNota.innerText = "Registrado!";
                     setTimeout(() => {
                         fecharModalNota();
@@ -1145,32 +1183,36 @@ document.addEventListener("DOMContentLoaded", async () => {
     }
     // Carregar entregadores para exibição
     async function carregarEntregadores() {
-    try {
-        const resposta = await fetchAutenticado(
-            "https://sos-alimentos-servidor.onrender.com/api/usuarios/entregadores",
-            {
-                credentials: "include"
+        try {
+            const resposta = await fetchAutenticado(
+                "https://sos-alimentos-servidor.onrender.com/api/usuarios/entregadores",
+                {
+                    credentials: "include"
+                }
+            );
+
+            if (!resposta.ok) {
+                throw new Error("Erro ao buscar entregadores");
             }
-        );
 
-        if (!resposta.ok) {
-            throw new Error("Erro ao buscar entregadores");
+            todosEntregadores = await resposta.json();
+
+        } catch (erro) {
+            console.error("Erro ao carregar entregadores:", erro);
+            todosEntregadores = [];
         }
-
-        todosEntregadores = await resposta.json();
-
-    } catch (erro) {
-        console.error("Erro ao carregar entregadores:", erro);
-        todosEntregadores = [];
     }
-}
 
     // Autocomplete do campo "registrar em nome de" (admin/financeiro), na nota
     const inputEntregadorNota = document.getElementById("entregadorNota");
     const listaEntregadoresNota = document.getElementById("listaEntregadoresNota");
 
     if (inputEntregadorNota && listaEntregadoresNota) {
+        const inputEntregadorNotaId = document.getElementById('entregadorSelecionadoId');
         inputEntregadorNota.addEventListener("input", () => {
+            // limpeza do id quando o usuário altera o texto manualmente
+            if (inputEntregadorNotaId) inputEntregadorNotaId.value = "";
+
             const texto = inputEntregadorNota.value.trim().toLowerCase();
             listaEntregadoresNota.innerHTML = "";
             listaEntregadoresNota.classList.remove("active");
@@ -1187,6 +1229,7 @@ document.addEventListener("DOMContentLoaded", async () => {
                 item.textContent = entregador.nome;
                 item.addEventListener("click", () => {
                     inputEntregadorNota.value = entregador.nome;
+                    if (inputEntregadorNotaId) inputEntregadorNotaId.value = entregador._id || entregador.id || "";
                     listaEntregadoresNota.innerHTML = "";
                     listaEntregadoresNota.classList.remove("active");
                 });
@@ -1311,29 +1354,29 @@ document.addEventListener("DOMContentLoaded", async () => {
     }
 
     // Exibicao dos clientes
-    if(btnPesquisarCliente){
+    if (btnPesquisarCliente) {
         btnPesquisarCliente.addEventListener("click", carregarClientes);
     }
-    
+
     function renderClientes(clientes) {
-    clientesConteudo.innerHTML = "";
+        clientesConteudo.innerHTML = "";
 
-    const listaBase = [...clientes];
+        const listaBase = [...clientes];
 
-    const normalizarTexto = (valor) =>
-        String(valor || "")
-            .normalize("NFD")
-            .replace(/[\u0300-\u036f]/g, "")
-            .toLowerCase();
+        const normalizarTexto = (valor) =>
+            String(valor || "")
+                .normalize("NFD")
+                .replace(/[\u0300-\u036f]/g, "")
+                .toLowerCase();
 
-    // ==========================
-    // BARRA DE FERRAMENTAS
-    // ==========================
+        // ==========================
+        // BARRA DE FERRAMENTAS
+        // ==========================
 
-    const toolbar = document.createElement("div");
-    toolbar.classList.add("clientes-toolbar");
+        const toolbar = document.createElement("div");
+        toolbar.classList.add("clientes-toolbar");
 
-    toolbar.innerHTML = `
+        toolbar.innerHTML = `
         <h2>Clientes</h2>
 
         <input
@@ -1361,261 +1404,261 @@ document.addEventListener("DOMContentLoaded", async () => {
         </button>
     `;
 
-    clientesConteudo.appendChild(toolbar);
+        clientesConteudo.appendChild(toolbar);
 
-    // ==========================
-    // LAYOUT
-    // ==========================
+        // ==========================
+        // LAYOUT
+        // ==========================
 
-    const area = document.createElement("div");
-    area.className = "clientes-listagem-layout";
+        const area = document.createElement("div");
+        area.className = "clientes-listagem-layout";
 
-    clientesConteudo.appendChild(area);
+        clientesConteudo.appendChild(area);
 
-    const indiceAZ = document.createElement("nav");
-    indiceAZ.className = "notas-az-index clientes-az-index";
+        const indiceAZ = document.createElement("nav");
+        indiceAZ.className = "notas-az-index clientes-az-index";
 
-    area.appendChild(indiceAZ);
+        area.appendChild(indiceAZ);
 
-    const coluna = document.createElement("div");
-    coluna.className = "clientes-coluna-alfabetica";
+        const coluna = document.createElement("div");
+        coluna.className = "clientes-coluna-alfabetica";
 
-    area.appendChild(coluna);
+        area.appendChild(coluna);
 
-    // ==========================
-    // ELEMENTOS
-    // ==========================
+        // ==========================
+        // ELEMENTOS
+        // ==========================
 
-    const inputBusca = toolbar.querySelector("#buscaCliente");
-    const ordenar = toolbar.querySelector("#ordenarClientes");
-    const filtrar = toolbar.querySelector("#filtrarClientes");
-    const btnAtualizar = toolbar.querySelector("#carregarClientes");
+        const inputBusca = toolbar.querySelector("#buscaCliente");
+        const ordenar = toolbar.querySelector("#ordenarClientes");
+        const filtrar = toolbar.querySelector("#filtrarClientes");
+        const btnAtualizar = toolbar.querySelector("#carregarClientes");
 
-    // ==========================
-    // FILTRAR / ORDENAR
-    // ==========================
+        // ==========================
+        // FILTRAR / ORDENAR
+        // ==========================
 
-    function obterListaFiltrada() {
+        function obterListaFiltrada() {
 
-        let lista = [...listaBase];
+            let lista = [...listaBase];
 
-        const termo = normalizarTexto(
-            inputBusca.value.trim()
-        );
-
-        if (termo) {
-            lista = lista.filter(cliente =>
-                normalizarTexto(cliente.cliente)
-                    .includes(termo)
-            );
-        }
-
-        if (filtrar.value === "comCnpj") {
-            lista = lista.filter(cliente => cliente.cnpj);
-        }
-
-        if (filtrar.value === "semCnpj") {
-            lista = lista.filter(cliente => !cliente.cnpj);
-        }
-
-        if (ordenar.value === "nomeDec") {
-
-            lista.sort((a, b) =>
-                String(b.cliente || "").localeCompare(
-                    String(a.cliente || ""),
-                    "pt-BR"
-                )
+            const termo = normalizarTexto(
+                inputBusca.value.trim()
             );
 
-        } else if (ordenar.value === "id") {
+            if (termo) {
+                lista = lista.filter(cliente =>
+                    normalizarTexto(cliente.cliente)
+                        .includes(termo)
+                );
+            }
 
-            lista.sort((a, b) =>
-                String(a.id ?? "").localeCompare(
-                    String(b.id ?? ""),
-                    "pt-BR",
-                    { numeric: true }
-                )
-            );
+            if (filtrar.value === "comCnpj") {
+                lista = lista.filter(cliente => cliente.cnpj);
+            }
 
-        } else {
+            if (filtrar.value === "semCnpj") {
+                lista = lista.filter(cliente => !cliente.cnpj);
+            }
 
-            lista.sort((a, b) =>
-                String(a.cliente || "").localeCompare(
-                    String(b.cliente || ""),
-                    "pt-BR"
-                )
-            );
+            if (ordenar.value === "nomeDec") {
+
+                lista.sort((a, b) =>
+                    String(b.cliente || "").localeCompare(
+                        String(a.cliente || ""),
+                        "pt-BR"
+                    )
+                );
+
+            } else if (ordenar.value === "id") {
+
+                lista.sort((a, b) =>
+                    String(a.id ?? "").localeCompare(
+                        String(b.id ?? ""),
+                        "pt-BR",
+                        { numeric: true }
+                    )
+                );
+
+            } else {
+
+                lista.sort((a, b) =>
+                    String(a.cliente || "").localeCompare(
+                        String(b.cliente || ""),
+                        "pt-BR"
+                    )
+                );
+            }
+
+            return lista;
         }
 
-        return lista;
-    }
+        // ==========================
+        // RENDERIZAR
+        // ==========================
 
-    // ==========================
-    // RENDERIZAR
-    // ==========================
+        function renderLista() {
 
-    function renderLista() {
+            const lista = obterListaFiltrada();
 
-        const lista = obterListaFiltrada();
+            coluna.innerHTML = "";
+            indiceAZ.innerHTML = "";
 
-        coluna.innerHTML = "";
-        indiceAZ.innerHTML = "";
+            if (lista.length === 0) {
 
-        if (lista.length === 0) {
-
-            coluna.innerHTML = `
+                coluna.innerHTML = `
                 <p class="sem-notas-txt">
                     Nenhum cliente encontrado.
                 </p>
             `;
 
-            return;
-        }
-
-        // ==========================
-        // AGRUPAR POR LETRA
-        // ==========================
-
-        const grupos = {};
-
-        lista.forEach(cliente => {
-
-            const nome = String(
-                cliente.cliente || ""
-            ).trim();
-
-            const letra =
-                normalizarTexto(nome)
-                    .charAt(0)
-                    .toUpperCase() || "#";
-
-            if (!grupos[letra]) {
-                grupos[letra] = [];
+                return;
             }
 
-            grupos[letra].push(cliente);
-        });
+            // ==========================
+            // AGRUPAR POR LETRA
+            // ==========================
 
-        // ==========================
-        // ORDEM DOS GRUPOS
-        // ==========================
+            const grupos = {};
 
-        const letrasOrdenadas =
-            Object.keys(grupos).sort((a, b) => {
+            lista.forEach(cliente => {
 
-                if (ordenar.value === "nomeDec") {
-                    return b.localeCompare(
-                        a,
+                const nome = String(
+                    cliente.cliente || ""
+                ).trim();
+
+                const letra =
+                    normalizarTexto(nome)
+                        .charAt(0)
+                        .toUpperCase() || "#";
+
+                if (!grupos[letra]) {
+                    grupos[letra] = [];
+                }
+
+                grupos[letra].push(cliente);
+            });
+
+            // ==========================
+            // ORDEM DOS GRUPOS
+            // ==========================
+
+            const letrasOrdenadas =
+                Object.keys(grupos).sort((a, b) => {
+
+                    if (ordenar.value === "nomeDec") {
+                        return b.localeCompare(
+                            a,
+                            "pt-BR"
+                        );
+                    }
+
+                    return a.localeCompare(
+                        b,
                         "pt-BR"
+                    );
+                });
+
+            // ==========================
+            // BARRA A-Z / Z-A
+            // ==========================
+
+            let letrasIndice =
+                "ABCDEFGHIJKLMNOPQRSTUVWXYZ".split("");
+
+            if (ordenar.value === "nomeDec") {
+                letrasIndice.reverse();
+            }
+
+            letrasIndice.forEach(letra => {
+
+                const existe =
+                    Boolean(grupos[letra]);
+
+                const elemento =
+                    document.createElement(
+                        existe ? "button" : "span"
+                    );
+
+                elemento.textContent = letra;
+
+                elemento.className =
+                    "notas-az-index-letra" +
+                    (
+                        existe
+                            ? ""
+                            : " notas-az-index-letra--vazia"
+                    );
+
+                if (existe) {
+
+                    elemento.type = "button";
+
+                    elemento.addEventListener(
+                        "click",
+                        () => {
+
+                            const alvo =
+                                document.getElementById(
+                                    `clientes-letra-${letra}`
+                                );
+
+                            if (alvo) {
+
+                                alvo.scrollIntoView({
+                                    behavior: "smooth",
+                                    block: "start"
+                                });
+                            }
+                        }
                     );
                 }
 
-                return a.localeCompare(
-                    b,
-                    "pt-BR"
-                );
+                indiceAZ.appendChild(elemento);
             });
 
-        // ==========================
-        // BARRA A-Z / Z-A
-        // ==========================
+            // ==========================
+            // CARDS
+            // ==========================
 
-        let letrasIndice =
-            "ABCDEFGHIJKLMNOPQRSTUVWXYZ".split("");
+            letrasOrdenadas.forEach(letra => {
 
-        if (ordenar.value === "nomeDec") {
-            letrasIndice.reverse();
-        }
+                const secao =
+                    document.createElement("section");
 
-        letrasIndice.forEach(letra => {
+                secao.className =
+                    "secao-letra-bloco clientes-secao-letra";
 
-            const existe =
-                Boolean(grupos[letra]);
+                secao.id =
+                    `clientes-letra-${letra}`;
 
-            const elemento =
-                document.createElement(
-                    existe ? "button" : "span"
-                );
+                const titulo =
+                    document.createElement("h3");
 
-            elemento.textContent = letra;
+                titulo.className =
+                    "letra-divisor-titulo";
 
-            elemento.className =
-                "notas-az-index-letra" +
-                (
-                    existe
-                        ? ""
-                        : " notas-az-index-letra--vazia"
-                );
+                titulo.textContent = letra;
 
-            if (existe) {
+                secao.appendChild(titulo);
 
-                elemento.type = "button";
-
-                elemento.addEventListener(
-                    "click",
-                    () => {
-
-                        const alvo =
-                            document.getElementById(
-                                `clientes-letra-${letra}`
-                            );
-
-                        if (alvo) {
-
-                            alvo.scrollIntoView({
-                                behavior: "smooth",
-                                block: "start"
-                            });
-                        }
-                    }
-                );
-            }
-
-            indiceAZ.appendChild(elemento);
-        });
-
-        // ==========================
-        // CARDS
-        // ==========================
-
-        letrasOrdenadas.forEach(letra => {
-
-            const secao =
-                document.createElement("section");
-
-            secao.className =
-                "secao-letra-bloco clientes-secao-letra";
-
-            secao.id =
-                `clientes-letra-${letra}`;
-
-            const titulo =
-                document.createElement("h3");
-
-            titulo.className =
-                "letra-divisor-titulo";
-
-            titulo.textContent = letra;
-
-            secao.appendChild(titulo);
-
-            // ESSENCIAL:
-            // os cards ficam dentro do GRID
-            const grid =
-                document.createElement("div");
-
-            grid.className =
-                "grid-clientes-nota";
-
-            grupos[letra].forEach(cliente => {
-
-                const card =
+                // ESSENCIAL:
+                // os cards ficam dentro do GRID
+                const grid =
                     document.createElement("div");
 
-                card.className =
-                    "cliente-card";
+                grid.className =
+                    "grid-clientes-nota";
 
-                card.innerHTML = `
+                grupos[letra].forEach(cliente => {
+
+                    const card =
+                        document.createElement("div");
+
+                    card.className =
+                        "cliente-card";
+
+                    card.innerHTML = `
                     <div class="cliente-topo">
 
                         <h3>
@@ -1655,120 +1698,120 @@ document.addEventListener("DOMContentLoaded", async () => {
                     </div>
                 `;
 
-                // EDITAR
+                    // EDITAR
 
-                const btnEditar =
-                    card.querySelector(
-                        ".btn-editar"
-                    );
-
-                btnEditar.addEventListener(
-                    "click",
-                    () => {
-                        abrirModalClienteParaEdicao(
-                            cliente
+                    const btnEditar =
+                        card.querySelector(
+                            ".btn-editar"
                         );
-                    }
-                );
 
-                // EXCLUIR
-
-                const btnExcluir =
-                    card.querySelector(
-                        ".btn-excluir-cliente"
-                    );
-
-                btnExcluir.addEventListener(
-                    "click",
-                    async () => {
-
-                        const confirmar =
-                            confirm(
-                                `Excluir o cliente "${cliente.cliente}"? Essa ação não pode ser desfeita.`
-                            );
-
-                        if (!confirmar) return;
-
-                        try {
-
-                            const resposta =
-                                await fetchAutenticado(
-                                    `https://sos-alimentos-servidor.onrender.com/api/clientes/${cliente._id}`,
-                                    {
-                                        method: "DELETE",
-                                        credentials: "include"
-                                    }
-                                );
-
-                            const dados =
-                                await resposta
-                                    .json()
-                                    .catch(() => ({}));
-
-                            if (!resposta.ok) {
-
-                                throw new Error(
-                                    dados.erro ||
-                                    dados.error ||
-                                    "O servidor recusou a exclusão."
-                                );
-                            }
-
-                            await carregarClientes();
-
-                        } catch (erro) {
-
-                            console.error(
-                                "Erro ao excluir cliente:",
-                                erro
-                            );
-
-                            alert(
-                                erro.message ||
-                                "Erro ao excluir cliente."
+                    btnEditar.addEventListener(
+                        "click",
+                        () => {
+                            abrirModalClienteParaEdicao(
+                                cliente
                             );
                         }
-                    }
-                );
+                    );
 
-                // COLOCA O CARD NO GRID
-                grid.appendChild(card);
+                    // EXCLUIR
+
+                    const btnExcluir =
+                        card.querySelector(
+                            ".btn-excluir-cliente"
+                        );
+
+                    btnExcluir.addEventListener(
+                        "click",
+                        async () => {
+
+                            const confirmar =
+                                confirm(
+                                    `Excluir o cliente "${cliente.cliente}"? Essa ação não pode ser desfeita.`
+                                );
+
+                            if (!confirmar) return;
+
+                            try {
+
+                                const resposta =
+                                    await fetchAutenticado(
+                                        `https://sos-alimentos-servidor.onrender.com/api/clientes/${cliente._id}`,
+                                        {
+                                            method: "DELETE",
+                                            credentials: "include"
+                                        }
+                                    );
+
+                                const dados =
+                                    await resposta
+                                        .json()
+                                        .catch(() => ({}));
+
+                                if (!resposta.ok) {
+
+                                    throw new Error(
+                                        dados.erro ||
+                                        dados.error ||
+                                        "O servidor recusou a exclusão."
+                                    );
+                                }
+
+                                await carregarClientes();
+
+                            } catch (erro) {
+
+                                console.error(
+                                    "Erro ao excluir cliente:",
+                                    erro
+                                );
+
+                                alert(
+                                    erro.message ||
+                                    "Erro ao excluir cliente."
+                                );
+                            }
+                        }
+                    );
+
+                    // COLOCA O CARD NO GRID
+                    grid.appendChild(card);
+                });
+
+                secao.appendChild(grid);
+                coluna.appendChild(secao);
             });
+        }
 
-            secao.appendChild(grid);
-            coluna.appendChild(secao);
-        });
+        // ==========================
+        // EVENTOS
+        // ==========================
+
+        inputBusca.addEventListener(
+            "input",
+            renderLista
+        );
+
+        ordenar.addEventListener(
+            "change",
+            renderLista
+        );
+
+        filtrar.addEventListener(
+            "change",
+            renderLista
+        );
+
+        btnAtualizar.addEventListener(
+            "click",
+            carregarClientes
+        );
+
+        // PRIMEIRA RENDERIZAÇÃO
+        renderLista();
     }
 
-    // ==========================
-    // EVENTOS
-    // ==========================
 
-    inputBusca.addEventListener(
-        "input",
-        renderLista
-    );
-
-    ordenar.addEventListener(
-        "change",
-        renderLista
-    );
-
-    filtrar.addEventListener(
-        "change",
-        renderLista
-    );
-
-    btnAtualizar.addEventListener(
-        "click",
-        carregarClientes
-    );
-
-    // PRIMEIRA RENDERIZAÇÃO
-    renderLista();
-}
-
-            
 
     // ==========================================
     // SEÇÃO DE NOTAS FISCAIS
@@ -2381,10 +2424,13 @@ document.addEventListener("DOMContentLoaded", async () => {
 
         const formatarMoeda = (valor) => valor.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
-        const porEntregador = new Map(); // nome -> [{ cliente, valor, hora, timestamp, nota, confirmado }]
+        // Agrupa por entregador de forma estável usando `entregadorId` quando disponível.
+        // Chave: 'id:<id>' quando tiver id, ou 'name:<nome>' como fallback para notas antigas.
+        const porEntregador = new Map(); // key -> { name, list }
 
         notasNoPeriodo.forEach(nota => {
-            const nomeEntregador = nota.entregador || "Não informado";
+            const nomeEntregador = obterNomeEntregador(nota);
+            const key = nota.entregadorId ? `id:${nota.entregadorId}` : `name:${nomeEntregador}`;
 
             let hora = "--:--";
             let timestamp = 0;
@@ -2396,8 +2442,8 @@ document.addEventListener("DOMContentLoaded", async () => {
                 }
             }
 
-            if (!porEntregador.has(nomeEntregador)) porEntregador.set(nomeEntregador, []);
-            porEntregador.get(nomeEntregador).push({
+            if (!porEntregador.has(key)) porEntregador.set(key, { name: nomeEntregador, list: [] });
+            porEntregador.get(key).list.push({
                 cliente: nota.cliente || "Cliente não identificado",
                 valor: parseFloat(nota.valor) || 0,
                 hora,
@@ -2415,10 +2461,11 @@ document.addEventListener("DOMContentLoaded", async () => {
         }
 
         rotasPlanejadas.forEach(rota => {
-            const nomeEntregador = rota.entregador;
-            if (!porEntregador.has(nomeEntregador)) porEntregador.set(nomeEntregador, []);
+            const rotaKey = rota.entregadorId ? `id:${rota.entregadorId}` : `name:${(rota.entregador || '').trim()}`;
+            const rotaNome = rota.entregador || (rota.entregadorNome || 'Não informado');
+            if (!porEntregador.has(rotaKey)) porEntregador.set(rotaKey, { name: rotaNome, list: [] });
 
-            const entregasReais = porEntregador.get(nomeEntregador);
+            const entregasReais = porEntregador.get(rotaKey).list;
             const usadas = new Set();
 
             const listaPlanejada = (rota.clientes || []).map(nomeCliente => {
@@ -2438,7 +2485,7 @@ document.addEventListener("DOMContentLoaded", async () => {
             // O que sobrou de entrega real (não estava na rota planejada) entra depois, como "extra"
             const extras = entregasReais.filter((_, i) => !usadas.has(i));
 
-            porEntregador.set(nomeEntregador, [...listaPlanejada, ...extras]);
+            porEntregador.set(rotaKey, { name: rotaNome, list: [...listaPlanejada, ...extras] });
         });
 
         if (porEntregador.size === 0) {
@@ -2454,14 +2501,18 @@ document.addEventListener("DOMContentLoaded", async () => {
         // ordem em que os clientes foram adicionados na rota (nunca reordena
         // por horário, nem depois de todos confirmados). Só entregador SEM
         // rota nenhuma cai pra ordem cronológica de entrega.
-        const entregadoresComRota = new Set(rotasPlanejadas.map(r => r.entregador));
-        porEntregador.forEach((lista, nome) => {
-            if (entregadoresComRota.has(nome)) return; // mantém a ordem da rota
-            lista.sort((a, b) => a.timestamp - b.timestamp);
+        const entregadoresComRota = new Set(rotasPlanejadas.map(r => (r.entregadorId ? `id:${r.entregadorId}` : `name:${(r.entregador || '').trim()}`)));
+        porEntregador.forEach((obj, key) => {
+            if (entregadoresComRota.has(key)) return; // mantém a ordem da rota
+            obj.list.sort((a, b) => a.timestamp - b.timestamp);
         });
 
-        const entregadores = [...porEntregador.keys()].sort((a, b) => a.localeCompare(b));
-        const maxLinhas = Math.max(...entregadores.map(nome => porEntregador.get(nome).length));
+        // Ordena por nome de exibição
+        const entregadores = [...porEntregador.entries()]
+            .map(([key, obj]) => ({ key, name: obj.name, list: obj.list }))
+            .sort((a, b) => a.name.localeCompare(b.name));
+
+        const maxLinhas = Math.max(...entregadores.map(e => e.list.length));
 
         const wrapper = document.createElement("div");
         wrapper.classList.add("tabela-entregadores-wrapper");
@@ -2471,11 +2522,11 @@ document.addEventListener("DOMContentLoaded", async () => {
 
         const thead = document.createElement("thead");
         const linhaCabecalho = document.createElement("tr");
-        entregadores.forEach(nome => {
-            const lista = porEntregador.get(nome);
+        entregadores.forEach(ent => {
+            const lista = ent.list;
             const confirmadas = lista.filter(item => item.confirmado).length;
             const th = document.createElement("th");
-            th.innerHTML = `${nome}<span class="tabela-entregadores-contagem">${confirmadas}/${lista.length} entrega(s)</span>`;
+            th.innerHTML = `${ent.name}<span class="tabela-entregadores-contagem">${confirmadas}/${lista.length} entrega(s)</span>`;
             linhaCabecalho.appendChild(th);
         });
         thead.appendChild(linhaCabecalho);
@@ -2485,8 +2536,8 @@ document.addEventListener("DOMContentLoaded", async () => {
         for (let i = 0; i < maxLinhas; i++) {
             const linha = document.createElement("tr");
 
-            entregadores.forEach(nome => {
-                const item = porEntregador.get(nome)[i];
+            entregadores.forEach(ent => {
+                const item = ent.list[i];
                 const td = document.createElement("td");
 
                 if (item) {
@@ -2571,7 +2622,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 
         if (rotasExistentes.length > 0) {
             rotasExistentes.forEach(rota => {
-                blocosEntregadoresRotas.appendChild(criarBlocoEntregadorRota(rota.entregador, rota.clientes));
+                blocosEntregadoresRotas.appendChild(criarBlocoEntregadorRota(rota, rota.clientes));
             });
         } else {
             blocosEntregadoresRotas.appendChild(criarBlocoEntregadorRota());
@@ -2599,7 +2650,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 
             if (rotasExistentes.length > 0) {
                 rotasExistentes.forEach(rota => {
-                    blocosEntregadoresRotas.appendChild(criarBlocoEntregadorRota(rota.entregador, rota.clientes));
+                    blocosEntregadoresRotas.appendChild(criarBlocoEntregadorRota(rota, rota.clientes));
                 });
             } else {
                 blocosEntregadoresRotas.appendChild(criarBlocoEntregadorRota());
@@ -2616,18 +2667,22 @@ document.addEventListener("DOMContentLoaded", async () => {
     // Monta um bloco: nome do entregador + autocomplete de cliente + chips
     // dos clientes já adicionados. Reaproveitado tanto pra rota nova quanto
     // pra editar uma já existente (passando entregador/clientes prontos).
-    function criarBlocoEntregadorRota(nomeEntregador = "", clientesIniciais = []) {
-    const bloco = document.createElement("div");
-    bloco.classList.add("bloco-entregador-rota");
+    // `entregadorData` pode ser uma string (nome) ou um objeto { entregadorId, entregador }
+    function criarBlocoEntregadorRota(entregadorData = "", clientesIniciais = []) {
+        const bloco = document.createElement("div");
 
-    bloco.innerHTML = `
+        const inicialNome = (typeof entregadorData === 'string') ? entregadorData : (entregadorData?.entregador || entregadorData?.nome || '');
+        const inicialId = (typeof entregadorData === 'object' && entregadorData) ? (entregadorData.entregadorId || entregadorData._id || entregadorData.id || '') : '';
+        bloco.classList.add("bloco-entregador-rota");
+
+        bloco.innerHTML = `
         <div class="bloco-entregador-rota-topo">
             <div class="autocomplete bloco-entregador-rota-entregador">
                 <input
                     type="text"
                     class="input-nome-entregador-rota"
                     placeholder="Buscar entregador..."
-                    value="${nomeEntregador}"
+                    value="${inicialNome}"
                     autocomplete="off"
                 >
                 <div class="autocomplete-list lista-sugestoes-entregador-rota"></div>
@@ -2655,42 +2710,45 @@ document.addEventListener("DOMContentLoaded", async () => {
         <div class="chips-clientes-rota"></div>
     `;
 
-    // =========================================================
-    // ELEMENTOS DO BLOCO
-    // =========================================================
+        // se houver id inicial, grava no dataset para uso posterior
+        if (inicialId) bloco.dataset.entregadorId = inicialId;
 
-    const inputEntregador = bloco.querySelector(
-        ".input-nome-entregador-rota"
-    );
+        // =========================================================
+        // ELEMENTOS DO BLOCO
+        // =========================================================
 
-    const listaEntregadores = bloco.querySelector(
-        ".lista-sugestoes-entregador-rota"
-    );
+        const inputEntregador = bloco.querySelector(
+            ".input-nome-entregador-rota"
+        );
 
-    const inputBusca = bloco.querySelector(
-        ".input-buscar-cliente-rota"
-    );
+        const listaEntregadores = bloco.querySelector(
+            ".lista-sugestoes-entregador-rota"
+        );
 
-    const listaSugestoes = bloco.querySelector(
-        ".lista-sugestoes-rota"
-    );
+        const inputBusca = bloco.querySelector(
+            ".input-buscar-cliente-rota"
+        );
 
-    const listaChips = bloco.querySelector(
-        ".chips-clientes-rota"
-    );
+        const listaSugestoes = bloco.querySelector(
+            ".lista-sugestoes-rota"
+        );
 
-    const clientesDoBloco = [...clientesIniciais]
-        .map(c => typeof c === "string" ? c : (c?.cliente || c?.nome || ""))
-        .filter(Boolean);
+        const listaChips = bloco.querySelector(
+            ".chips-clientes-rota"
+        );
+
+        const clientesDoBloco = [...clientesIniciais]
+            .map(c => typeof c === "string" ? c : (c?.cliente || c?.nome || ""))
+            .filter(Boolean);
 
 
-    // =========================================================
-    // RENDERIZAR CHIPS DOS CLIENTES
-    // =========================================================
+        // =========================================================
+        // RENDERIZAR CHIPS DOS CLIENTES
+        // =========================================================
 
-    function renderizarChips() {
-        listaChips.innerHTML = clientesDoBloco
-            .map((nome, indice) => `
+        function renderizarChips() {
+            listaChips.innerHTML = clientesDoBloco
+                .map((nome, indice) => `
                 <span class="chip-cliente-rota">
                     ${nome}
                     <button
@@ -2702,373 +2760,378 @@ document.addEventListener("DOMContentLoaded", async () => {
                     </button>
                 </span>
             `)
-            .join("");
+                .join("");
 
-        listaChips
-            .querySelectorAll(".chip-cliente-rota-remover")
-            .forEach(btn => {
-                btn.addEventListener("click", () => {
-                    clientesDoBloco.splice(
-                        Number(btn.dataset.indice),
-                        1
-                    );
+            listaChips
+                .querySelectorAll(".chip-cliente-rota-remover")
+                .forEach(btn => {
+                    btn.addEventListener("click", () => {
+                        clientesDoBloco.splice(
+                            Number(btn.dataset.indice),
+                            1
+                        );
 
-                    renderizarChips();
+                        renderizarChips();
+                    });
                 });
-            });
-    }
-
-    renderizarChips();
-
-
-    // =========================================================
-    // AUTOCOMPLETE DE ENTREGADORES
-    // =========================================================
-
-    inputEntregador.addEventListener("input", () => {
-        const texto = inputEntregador.value;
-
-        listaEntregadores.innerHTML = "";
-        listaEntregadores.classList.remove("active");
-
-        if (!texto) {
-            return;
         }
 
-        const encontrados = todosEntregadores
-            .filter(e =>
-                e.nome &&
-                e.nome.toLowerCase().includes(texto)
-            )
-            .slice(0, 8);
-
-        encontrados.forEach(entregador => {
-            const item = document.createElement("div");
-
-            item.className = "autocomplete-item";
-            item.textContent = entregador.nome;
-
-            item.addEventListener("click", () => {
-                inputEntregador.value = entregador.nome;
-                listaEntregadores.innerHTML = "";
-                listaEntregadores.classList.remove("active");
-            });
-
-            listaEntregadores.appendChild(item);
-        });
-
-        if (encontrados.length > 0) {
-            listaEntregadores.classList.add("active");
-        }
-    });
-
-
-    // =========================================================
-    // AUTOCOMPLETE DE CLIENTES
-    // =========================================================
-
-    const normalizarBuscaRota = (valor) => String(valor || "")
-        .normalize("NFD")
-        .replace(/[\u0300-\u036f]/g, "")
-        .toLowerCase()
-        .trim();
-
-    // Nomes de clientes digitados manualmente (não cadastrados ainda) —
-    // persistidos localmente pra continuar aparecendo no autocomplete depois.
-    function obterNomesExtrasClientesRota() {
-        try {
-            return JSON.parse(localStorage.getItem("extrasClientesRotas") || "[]");
-        } catch {
-            return [];
-        }
-    }
-
-    function persistirNomeExtraClienteRota(nome) {
-        const jaConhecido = todosClientes.some(c => normalizarBuscaRota(c.cliente) === normalizarBuscaRota(nome));
-        if (jaConhecido) return;
-
-        const extras = obterNomesExtrasClientesRota();
-        if (!extras.some(n => normalizarBuscaRota(n) === normalizarBuscaRota(nome))) {
-            extras.push(nome);
-            localStorage.setItem("extrasClientesRotas", JSON.stringify(extras));
-        }
-    }
-
-    function adicionarClienteAoBloco(nome) {
-        const nomeLimpo = String(nome || "").trim();
-        if (!nomeLimpo) return;
-        if (clientesDoBloco.some(c => normalizarBuscaRota(c) === normalizarBuscaRota(nomeLimpo))) return;
-
-        clientesDoBloco.push(nomeLimpo);
-        persistirNomeExtraClienteRota(nomeLimpo);
         renderizarChips();
-        inputBusca.value = "";
-        listaSugestoes.innerHTML = "";
-        listaSugestoes.style.display = "none";
-        inputBusca.focus();
-    }
-
-    function atualizarSugestoesClientesRota() {
-        const texto = normalizarBuscaRota(inputBusca.value);
-        listaSugestoes.innerHTML = "";
-
-        const jaAdicionados = new Set(clientesDoBloco.map(normalizarBuscaRota));
-
-        const nomesConhecidos = [
-            ...todosClientes.map(c => c.cliente),
-            ...obterNomesExtrasClientesRota()
-        ];
-        const nomesUnicos = [...new Map(nomesConhecidos.map(n => [normalizarBuscaRota(n), n])).values()];
-
-        const encontrados = nomesUnicos
-            .filter(nomeCliente => {
-                const nome = normalizarBuscaRota(nomeCliente);
-                return nome &&
-                    !jaAdicionados.has(nome) &&
-                    (!texto || nome.includes(texto));
-            })
-            .sort((a, b) => String(a).localeCompare(String(b), "pt-BR"))
-            .slice(0, 12);
-
-        encontrados.forEach(nomeCliente => {
-            const item = document.createElement("button");
-            item.type = "button";
-            item.className = "autocomplete-item";
-            item.textContent = nomeCliente;
-
-            item.addEventListener("mousedown", (e) => e.preventDefault());
-            item.addEventListener("click", () => adicionarClienteAoBloco(nomeCliente));
-
-            listaSugestoes.appendChild(item);
-        });
-
-        // Nome digitado não bate com nenhum conhecido — oferece adicionar como novo
-        const textoOriginal = inputBusca.value.trim();
-        if (textoOriginal && !nomesUnicos.some(n => normalizarBuscaRota(n) === normalizarBuscaRota(textoOriginal))) {
-            const itemNovo = document.createElement("button");
-            itemNovo.type = "button";
-            itemNovo.className = "autocomplete-item autocomplete-item--novo";
-            itemNovo.textContent = `+ Adicionar "${textoOriginal}" como novo cliente`;
-
-            itemNovo.addEventListener("mousedown", (e) => e.preventDefault());
-            itemNovo.addEventListener("click", () => adicionarClienteAoBloco(textoOriginal));
-
-            listaSugestoes.appendChild(itemNovo);
-        }
-
-        listaSugestoes.style.display = listaSugestoes.children.length ? "block" : "none";
-    }
-
-    inputBusca.addEventListener("input", atualizarSugestoesClientesRota);
-    inputBusca.addEventListener("focus", atualizarSugestoesClientesRota);
-
-    inputBusca.addEventListener("keydown", (e) => {
-        if (e.key === "Enter") {
-            e.preventDefault();
-            adicionarClienteAoBloco(inputBusca.value);
-        }
-    });
 
 
-    // =========================================================
-    // FECHAR SUGESTÕES AO CLICAR FORA DO BLOCO
-    // =========================================================
+        // =========================================================
+        // AUTOCOMPLETE DE ENTREGADORES
+        // =========================================================
 
-    document.addEventListener("click", (e) => {
-        if (!bloco.contains(e.target)) {
-            listaSugestoes.innerHTML = "";
-            listaSugestoes.style.display = "none";
+        inputEntregador.addEventListener("input", () => {
+            // limpeza do id caso o usuário altere o texto manualmente
+            bloco.dataset.entregadorId = '';
+            const texto = inputEntregador.value;
+
             listaEntregadores.innerHTML = "";
             listaEntregadores.classList.remove("active");
-        }
-    });
 
+            if (!texto) {
+                return;
+            }
 
-    // =========================================================
-    // REMOVER BLOCO
-    // =========================================================
+            const encontrados = todosEntregadores
+                .filter(e =>
+                    e.nome &&
+                    e.nome.toLowerCase().includes(texto)
+                )
+                .slice(0, 8);
 
-    bloco
-        .querySelector(".btn-remover-bloco-rota")
-        .addEventListener("click", () => {
-            bloco.remove();
+            encontrados.forEach(entregador => {
+                const item = document.createElement("div");
+
+                item.className = "autocomplete-item";
+                item.textContent = entregador.nome;
+
+                item.addEventListener("click", () => {
+                    inputEntregador.value = entregador.nome;
+                    // armazena id no bloco para uso estrutural (montagem por id)
+                    bloco.dataset.entregadorId = entregador._id || entregador.id || "";
+                    listaEntregadores.innerHTML = "";
+                    listaEntregadores.classList.remove("active");
+                });
+
+                listaEntregadores.appendChild(item);
+            });
+
+            if (encontrados.length > 0) {
+                listaEntregadores.classList.add("active");
+            }
         });
 
 
-    // =========================================================
-    // EXPÕE OS CLIENTES ATUAIS PARA O SALVAMENTO
-    // =========================================================
+        // =========================================================
+        // AUTOCOMPLETE DE CLIENTES
+        // =========================================================
 
-    bloco.obterClientes = () => clientesDoBloco;
+        const normalizarBuscaRota = (valor) => String(valor || "")
+            .normalize("NFD")
+            .replace(/[\u0300-\u036f]/g, "")
+            .toLowerCase()
+            .trim();
 
-
-    return bloco;
-}
-
-
-// =============================================================
-// SALVAR PRÉ-TABELA DE ROTAS
-// =============================================================
-
-if (btnSalvarRotas) {
-    btnSalvarRotas.addEventListener("click", async () => {
-
-        const data = dataPlanejamentoRotas.value;
-
-        if (!data) {
-            mostrarFeedbackRotas(
-                "Escolha a data da rota.",
-                "erro"
-            );
-            return;
+        // Nomes de clientes digitados manualmente (não cadastrados ainda) —
+        // persistidos localmente pra continuar aparecendo no autocomplete depois.
+        function obterNomesExtrasClientesRota() {
+            try {
+                return JSON.parse(localStorage.getItem("extrasClientesRotas") || "[]");
+            } catch {
+                return [];
+            }
         }
 
+        function persistirNomeExtraClienteRota(nome) {
+            const jaConhecido = todosClientes.some(c => normalizarBuscaRota(c.cliente) === normalizarBuscaRota(nome));
+            if (jaConhecido) return;
 
-        // -----------------------------------------------------
-        // PEGA TODOS OS BLOCOS
-        // -----------------------------------------------------
-
-        const blocos = [
-            ...blocosEntregadoresRotas.querySelectorAll(
-                ".bloco-entregador-rota"
-            )
-        ];
-
-
-        // -----------------------------------------------------
-        // MONTA AS ROTAS
-        // -----------------------------------------------------
-
-        const rotas = blocos
-            .map(bloco => ({
-                entregador: bloco
-                    .querySelector(".input-nome-entregador-rota")
-                    .value
-                    .trim(),
-
-                clientes: bloco.obterClientes()
-            }))
-            .filter(
-                rota =>
-                    rota.entregador &&
-                    rota.clientes.length > 0
-            );
-
-
-        // -----------------------------------------------------
-        // VALIDAÇÃO
-        // -----------------------------------------------------
-
-        if (rotas.length === 0) {
-            mostrarFeedbackRotas(
-                "Adicione pelo menos um entregador com clientes.",
-                "erro"
-            );
-            return;
+            const extras = obterNomesExtrasClientesRota();
+            if (!extras.some(n => normalizarBuscaRota(n) === normalizarBuscaRota(nome))) {
+                extras.push(nome);
+                localStorage.setItem("extrasClientesRotas", JSON.stringify(extras));
+            }
         }
 
+        function adicionarClienteAoBloco(nome) {
+            const nomeLimpo = String(nome || "").trim();
+            if (!nomeLimpo) return;
+            if (clientesDoBloco.some(c => normalizarBuscaRota(c) === normalizarBuscaRota(nomeLimpo))) return;
 
-        // -----------------------------------------------------
-        // DESABILITA BOTÃO
-        // -----------------------------------------------------
+            clientesDoBloco.push(nomeLimpo);
+            persistirNomeExtraClienteRota(nomeLimpo);
+            renderizarChips();
+            inputBusca.value = "";
+            listaSugestoes.innerHTML = "";
+            listaSugestoes.style.display = "none";
+            inputBusca.focus();
+        }
 
-        btnSalvarRotas.disabled = true;
-        btnSalvarRotas.textContent = "Salvando...";
+        function atualizarSugestoesClientesRota() {
+            const texto = normalizarBuscaRota(inputBusca.value);
+            listaSugestoes.innerHTML = "";
+
+            const jaAdicionados = new Set(clientesDoBloco.map(normalizarBuscaRota));
+
+            const nomesConhecidos = [
+                ...todosClientes.map(c => c.cliente),
+                ...obterNomesExtrasClientesRota()
+            ];
+            const nomesUnicos = [...new Map(nomesConhecidos.map(n => [normalizarBuscaRota(n), n])).values()];
+
+            const encontrados = nomesUnicos
+                .filter(nomeCliente => {
+                    const nome = normalizarBuscaRota(nomeCliente);
+                    return nome &&
+                        !jaAdicionados.has(nome) &&
+                        (!texto || nome.includes(texto));
+                })
+                .sort((a, b) => String(a).localeCompare(String(b), "pt-BR"))
+                .slice(0, 12);
+
+            encontrados.forEach(nomeCliente => {
+                const item = document.createElement("button");
+                item.type = "button";
+                item.className = "autocomplete-item";
+                item.textContent = nomeCliente;
+
+                item.addEventListener("mousedown", (e) => e.preventDefault());
+                item.addEventListener("click", () => adicionarClienteAoBloco(nomeCliente));
+
+                listaSugestoes.appendChild(item);
+            });
+
+            // Nome digitado não bate com nenhum conhecido — oferece adicionar como novo
+            const textoOriginal = inputBusca.value.trim();
+            if (textoOriginal && !nomesUnicos.some(n => normalizarBuscaRota(n) === normalizarBuscaRota(textoOriginal))) {
+                const itemNovo = document.createElement("button");
+                itemNovo.type = "button";
+                itemNovo.className = "autocomplete-item autocomplete-item--novo";
+                itemNovo.textContent = `+ Adicionar "${textoOriginal}" como novo cliente`;
+
+                itemNovo.addEventListener("mousedown", (e) => e.preventDefault());
+                itemNovo.addEventListener("click", () => adicionarClienteAoBloco(textoOriginal));
+
+                listaSugestoes.appendChild(itemNovo);
+            }
+
+            listaSugestoes.style.display = listaSugestoes.children.length ? "block" : "none";
+        }
+
+        inputBusca.addEventListener("input", atualizarSugestoesClientesRota);
+        inputBusca.addEventListener("focus", atualizarSugestoesClientesRota);
+
+        inputBusca.addEventListener("keydown", (e) => {
+            if (e.key === "Enter") {
+                e.preventDefault();
+                adicionarClienteAoBloco(inputBusca.value);
+            }
+        });
 
 
-        try {
+        // =========================================================
+        // FECHAR SUGESTÕES AO CLICAR FORA DO BLOCO
+        // =========================================================
 
-            // -------------------------------------------------
-            // ENVIA PARA O SERVIDOR
-            // -------------------------------------------------
-
-            const resposta = await fetchAutenticado(
-                "https://sos-alimentos-servidor.onrender.com/api/rotas-planejadas",
-                {
-                    method: "POST",
-
-                    headers: {
-                        "Content-Type": "application/json"
-                    },
-
-                    credentials: "include",
-
-                    body: JSON.stringify({
-                        data,
-                        rotas
-                    })
-                }
-            );
+        document.addEventListener("click", (e) => {
+            if (!bloco.contains(e.target)) {
+                listaSugestoes.innerHTML = "";
+                listaSugestoes.style.display = "none";
+                listaEntregadores.innerHTML = "";
+                listaEntregadores.classList.remove("active");
+            }
+        });
 
 
-            // -------------------------------------------------
-            // LÊ RESPOSTA
-            // -------------------------------------------------
+        // =========================================================
+        // REMOVER BLOCO
+        // =========================================================
 
-            const respostaData =
-                await resposta
-                    .json()
-                    .catch(() => ({}));
+        bloco
+            .querySelector(".btn-remover-bloco-rota")
+            .addEventListener("click", () => {
+                bloco.remove();
+            });
 
 
-            // -------------------------------------------------
-            // SUCESSO
-            // -------------------------------------------------
+        // =========================================================
+        // EXPÕE OS CLIENTES ATUAIS PARA O SALVAMENTO
+        // =========================================================
 
-            if (resposta.ok) {
+        bloco.obterClientes = () => clientesDoBloco;
 
+
+        return bloco;
+    }
+
+
+    // =============================================================
+    // SALVAR PRÉ-TABELA DE ROTAS
+    // =============================================================
+
+    if (btnSalvarRotas) {
+        btnSalvarRotas.addEventListener("click", async () => {
+
+            const data = dataPlanejamentoRotas.value;
+
+            if (!data) {
                 mostrarFeedbackRotas(
-                    "✅ Pré-tabela salva com sucesso!",
-                    "sucesso"
-                );
-
-
-                // Se a data planejada é a mesma que está sendo
-                // visualizada no faturamento, atualiza a tabela.
-
-                if (
-                    data === filtroFaturamentoInicio &&
-                    data === filtroFaturamentoFim
-                ) {
-                    montarResumoEListaFaturamento(
-                        document.getElementById(
-                            "faturamentoConteudo"
-                        )
-                    );
-                }
-
-
-                setTimeout(
-                    fecharModalPlanejarRotas,
-                    1200
-                );
-
-            } else {
-
-                mostrarFeedbackRotas(
-                    respostaData.erro ||
-                    "Erro ao salvar a pré-tabela.",
+                    "Escolha a data da rota.",
                     "erro"
                 );
+                return;
             }
 
 
-        } catch (erro) {
+            // -----------------------------------------------------
+            // PEGA TODOS OS BLOCOS
+            // -----------------------------------------------------
 
-            console.error(erro);
+            const blocos = [
+                ...blocosEntregadoresRotas.querySelectorAll(
+                    ".bloco-entregador-rota"
+                )
+            ];
 
-            mostrarFeedbackRotas(
-                "Erro ao salvar a pré-tabela. Verifique se a rota do servidor está disponível.",
-                "erro"
-            );
 
-        } finally {
+            // -----------------------------------------------------
+            // MONTA AS ROTAS
+            // -----------------------------------------------------
 
-            btnSalvarRotas.disabled = false;
-            btnSalvarRotas.textContent = "Salvar Pré-Tabela";
-        }
-    });
-}
+            const rotas = blocos
+                .map(bloco => {
+                    const entregadorNome = bloco.querySelector(".input-nome-entregador-rota").value.trim();
+                    const entregadorId = bloco.dataset.entregadorId || null;
+                    return {
+                        entregadorId,
+                        entregador: entregadorNome,
+                        clientes: bloco.obterClientes()
+                    };
+                })
+                .filter(
+                    rota =>
+                        rota.entregador &&
+                        rota.clientes.length > 0
+                );
+
+
+            // -----------------------------------------------------
+            // VALIDAÇÃO
+            // -----------------------------------------------------
+
+            if (rotas.length === 0) {
+                mostrarFeedbackRotas(
+                    "Adicione pelo menos um entregador com clientes.",
+                    "erro"
+                );
+                return;
+            }
+
+
+            // -----------------------------------------------------
+            // DESABILITA BOTÃO
+            // -----------------------------------------------------
+
+            btnSalvarRotas.disabled = true;
+            btnSalvarRotas.textContent = "Salvando...";
+
+
+            try {
+
+                // -------------------------------------------------
+                // ENVIA PARA O SERVIDOR
+                // -------------------------------------------------
+
+                const resposta = await fetchAutenticado(
+                    "https://sos-alimentos-servidor.onrender.com/api/rotas-planejadas",
+                    {
+                        method: "POST",
+
+                        headers: {
+                            "Content-Type": "application/json"
+                        },
+
+                        credentials: "include",
+
+                        body: JSON.stringify({
+                            data,
+                            rotas
+                        })
+                    }
+                );
+
+
+                // -------------------------------------------------
+                // LÊ RESPOSTA
+                // -------------------------------------------------
+
+                const respostaData =
+                    await resposta
+                        .json()
+                        .catch(() => ({}));
+
+
+                // -------------------------------------------------
+                // SUCESSO
+                // -------------------------------------------------
+
+                if (resposta.ok) {
+
+                    mostrarFeedbackRotas(
+                        "✅ Pré-tabela salva com sucesso!",
+                        "sucesso"
+                    );
+
+
+                    // Se a data planejada é a mesma que está sendo
+                    // visualizada no faturamento, atualiza a tabela.
+
+                    if (
+                        data === filtroFaturamentoInicio &&
+                        data === filtroFaturamentoFim
+                    ) {
+                        montarResumoEListaFaturamento(
+                            document.getElementById(
+                                "faturamentoConteudo"
+                            )
+                        );
+                    }
+
+
+                    setTimeout(
+                        fecharModalPlanejarRotas,
+                        1200
+                    );
+
+                } else {
+
+                    mostrarFeedbackRotas(
+                        respostaData.erro ||
+                        "Erro ao salvar a pré-tabela.",
+                        "erro"
+                    );
+                }
+
+
+            } catch (erro) {
+
+                console.error(erro);
+
+                mostrarFeedbackRotas(
+                    "Erro ao salvar a pré-tabela. Verifique se a rota do servidor está disponível.",
+                    "erro"
+                );
+
+            } finally {
+
+                btnSalvarRotas.disabled = false;
+                btnSalvarRotas.textContent = "Salvar Pré-Tabela";
+            }
+        });
+    }
 
     // Card só-leitura (sem ações) reaproveitando o mesmo visual das outras
     // listagens de nota do sistema.
@@ -3095,7 +3158,7 @@ if (btnSalvarRotas) {
             </div>
             <p class="cliente-data"><strong>Emissão:</strong> ${dataFormatada}</p>
             <p class="cliente-status"><strong>Status:</strong> ${nota.pago ? "Pago" : "Pendente"}</p>
-            <p class="cliente-entegador"><strong>Entregue:</strong> ${nota.entregador || 'Não informado'}</p>
+            <p class="cliente-entegador"><strong>Entregue:</strong> ${obterNomeEntregador(nota)}</p>
         `;
 
         return card;
@@ -3875,7 +3938,7 @@ if (btnSalvarRotas) {
                     </div>
                     <p class="cliente-data"><strong>Emissão:</strong> ${dataFormatada}</p>
                     <p class="cliente-email"><strong>E-mail:</strong> ${nota.email || 'Não informado'}</p>
-                    <p class="cliente-entregador"><strong>Entregue:</strong> ${nota.entregador || 'Não informado'}</p>
+                    <p class="cliente-entregador"><strong>Entregue:</strong> ${obterNomeEntregador(nota)}</p>
                     <div class="nota-image">
                         <img src="${nota.img}" alt="Foto da nota">
                     </div>

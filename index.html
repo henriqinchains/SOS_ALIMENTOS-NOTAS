@@ -122,6 +122,7 @@
                         <div class="autocomplete">
                             <input type="text" id="entregadorNota" name="entregadorSelecionado" autocomplete="off"
                                 placeholder="Deixe em branco para registrar no seu próprio nome">
+                            <input type="hidden" id="entregadorSelecionadoId" name="entregadorSelecionadoId">
                             <div id="listaEntregadoresNota" class="autocomplete-list"></div>
                         </div>
                     </div>
@@ -193,8 +194,8 @@
 
                 <div id="blocosEntregadoresRotas" class="blocos-entregadores-rotas"></div>
 
-                <button type="button" id="btnAdicionarEntregadorRota" class="button-secundario"
-                    style="width: 100%;">+ Adicionar Entregador</button>
+                <button type="button" id="btnAdicionarEntregadorRota" class="button-secundario" style="width: 100%;">+
+                    Adicionar Entregador</button>
 
                 <button type="button" id="btnSalvarRotas" class="button" style="margin-top: 18px;">Salvar
                     Pré-Tabela</button>

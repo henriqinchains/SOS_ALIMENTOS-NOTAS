@@ -14,6 +14,18 @@ let todosClientes = [];
 let clienteSelecionado = null;
 let numeroNota = 1;
 
+// Formata a data LOCAL (do celular) como "YYYY-MM-DD". new Date().toISOString()
+// converte pra UTC e "adianta" a data à noite (Brasil é UTC-3) — isso fazia
+// notas registradas depois das ~21h entrarem com a data de amanhã, quebrando
+// a Planejar Rota (que compara a data salva com a data local planejada).
+function obterDataLocalISO(data) {
+    const ano = data.getFullYear();
+    const mes = String(data.getMonth() + 1).padStart(2, "0");
+    const dia = String(data.getDate()).padStart(2, "0");
+    return `${ano}-${mes}-${dia}`;
+}
+let entregadorAtual = null;
+
 // Função para mostrar feedback inline
 function mostrarFeedback(mensagem, tipo) {
     feedback.textContent = mensagem;
@@ -41,6 +53,12 @@ async function verificarSessaoEntregador() {
             window.location.href = "../../";
             return false;
         }
+
+        // armazenar dados do entregador para enviar com a nota
+        entregadorAtual = {
+            id: dados._id || dados.id || null,
+            nome: dados.nome || dados.name || dados.usuario || ""
+        };
 
         return true;
     } catch (erro) {
@@ -175,6 +193,9 @@ async function enviarNotaServidor(nota, idLocal) {
     formData.append("pago", Boolean(nota.pago));
     formData.append("enviado", false);
     formData.append("img", nota.img);
+    // incluir identificador e nome do entregador (compatibilidade com backend)
+    formData.append("entregadorId", nota.entregadorId || "");
+    formData.append("entregador", nota.entregador || "");
 
     try {
         const resposta = await fetch(`${API_URL}/notas`, {
@@ -235,9 +256,11 @@ formEntrega.addEventListener("submit", async (e) => {
         cliente: clienteSelecionado.cliente.trim(),
         numeroNota,
         valor: inputValor.value.trim(),
-        dataEmissao: new Date().toISOString(),
+        dataEmissao: obterDataLocalISO(new Date()),
         img: inputImagem.files[0],
         pago: inputNotaJaPaga?.value === "true",
+        entregadorId: entregadorAtual ? entregadorAtual.id : null,
+        entregador: entregadorAtual ? entregadorAtual.nome : "",
         status: "pendente"
     };
 
@@ -256,6 +279,9 @@ formEntrega.addEventListener("submit", async (e) => {
     }
     clienteSelecionado = null;
     numeroNota = 1;
+    // Limpar possível estado de entregador armazenado localmente para evitar
+    // reuso indesejado em envios subsequentes.
+    entregadorAtual = null;
 });
 
 // =========================
@@ -266,4 +292,5 @@ formEntrega.addEventListener("submit", async (e) => {
     if (!sessaoValida) return;
 
     carregarClientes();
+
 })();

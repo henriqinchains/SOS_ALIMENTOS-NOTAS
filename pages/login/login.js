@@ -107,7 +107,7 @@ function initCadastro() {
     formCadastro.addEventListener("submit", async (e) => {
         e.preventDefault();
 
-        const usuario = document.getElementById("usuario-cadastro").value;
+        const usuario = document.getElementById("usuario-cadastro").value.trim();
         const telefone = document.getElementById("telefone-cadastro").value;
         const senha = document.getElementById("senha-cadastro").value;
         const confirmacaoSenha = document.getElementById(
