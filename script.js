@@ -55,19 +55,44 @@ let todosEntregadores = [];
 function obterNomeEntregador(nota) {
     if (!nota) return "Não informado";
 
-    // Se o campo entregador for uma string (notas antigas ou já populadas), retorna direto
-    if (typeof nota.entregador === 'string' && nota.entregador.trim()) return nota.entregador;
+    // 1. PRIMEIRO: tenta resolver pelo ID.
+    // O ID é a identificação real do entregador.
+    const id = nota.entregadorId || nota.entregador_id || null;
 
-    // Se o campo entregador for um objeto populado pelo backend, tenta extrair o nome
-    if (typeof nota.entregador === 'object' && nota.entregador !== null) {
-        return nota.entregador.nome || nota.entregador.name || nota.entregador.usuario || "Não informado";
+    if (id && Array.isArray(todosEntregadores)) {
+        const encontrado = todosEntregadores.find(
+            e => String(e._id || e.id) === String(id)
+        );
+
+        if (encontrado) {
+            return (
+                encontrado.nome ||
+                encontrado.name ||
+                encontrado.usuario ||
+                "Não informado"
+            );
+        }
     }
 
-    // Se tiver apenas entregadorId, tenta achar nos entregadores carregados no frontend
-    const id = nota.entregadorId || nota.entregador_id || nota.entregadorId === 0 ? nota.entregadorId : null;
-    if (id && Array.isArray(todosEntregadores)) {
-        const encontrado = todosEntregadores.find(e => String(e._id || e.id) === String(id));
-        if (encontrado) return encontrado.nome || encontrado.name || encontrado.usuario || "Não informado";
+    // 2. Se o backend já mandou o objeto populado
+    if (
+        typeof nota.entregador === "object" &&
+        nota.entregador !== null
+    ) {
+        return (
+            nota.entregador.nome ||
+            nota.entregador.name ||
+            nota.entregador.usuario ||
+            "Não informado"
+        );
+    }
+
+    // 3. Compatibilidade com notas antigas
+    if (
+        typeof nota.entregador === "string" &&
+        nota.entregador.trim()
+    ) {
+        return nota.entregador.trim();
     }
 
     return "Não informado";
@@ -2429,11 +2454,19 @@ document.addEventListener("DOMContentLoaded", async () => {
         const porEntregador = new Map(); // key -> { name, list }
 
         notasNoPeriodo.forEach(nota => {
-            const nomeEntregador = obterNomeEntregador(nota);
-            const key = nota.entregadorId ? `id:${nota.entregadorId}` : `name:${nomeEntregador}`;
+    const nomeEntregador = obterNomeEntregador(nota);
 
-            let hora = "--:--";
-            let timestamp = 0;
+    // O ID é a chave principal.
+    // Só usamos o nome para notas antigas que não possuem ID.
+    const entregadorId = nota.entregadorId || nota.entregador_id || null;
+
+    const key = entregadorId
+        ? `id:${String(entregadorId)}`
+        : `name:${nomeEntregador.trim().toLowerCase()}`;
+
+    let hora = "--:--";
+    let timestamp = 0;
+            
             if (nota.createdAt) {
                 const data = new Date(nota.createdAt);
                 if (!isNaN(data)) {
@@ -2461,26 +2494,113 @@ document.addEventListener("DOMContentLoaded", async () => {
         }
 
         rotasPlanejadas.forEach(rota => {
-            const rotaKey = rota.entregadorId ? `id:${rota.entregadorId}` : `name:${(rota.entregador || '').trim()}`;
-            const rotaNome = rota.entregador || (rota.entregadorNome || 'Não informado');
-            if (!porEntregador.has(rotaKey)) porEntregador.set(rotaKey, { name: rotaNome, list: [] });
 
-            const entregasReais = porEntregador.get(rotaKey).list;
-            const usadas = new Set();
+    const rotaId = rota.entregadorId
+        ? String(rota.entregadorId)
+        : "";
 
-            const listaPlanejada = (rota.clientes || []).map(nomeCliente => {
-                const chave = nomeCliente.toLowerCase().trim();
-                const correspondente = entregasReais.find((item, i) =>
-                    !usadas.has(i) && item.confirmado && item.cliente.toLowerCase().trim() === chave
-                );
+    const rotaNome = String(
+        rota.entregador ||
+        rota.entregadorNome ||
+        "Não informado"
+    ).trim();
 
-                if (correspondente) {
-                    usadas.add(entregasReais.indexOf(correspondente));
-                    return correspondente;
-                }
+    let rotaKey = rotaId
+        ? `id:${rotaId}`
+        : `name:${rotaNome.toLowerCase()}`;
 
-                return { cliente: nomeCliente, valor: null, hora: null, timestamp: -1, nota: null, confirmado: false };
-            });
+    /*
+     * Se a pré-tabela tem ID, mas as entregas antigas
+     * foram salvas somente pelo nome, tenta encontrar
+     * o entregador pelo nome antes de criar outro grupo.
+     */
+    if (!porEntregador.has(rotaKey) && rotaNome) {
+
+        const nomeNormalizado = rotaNome
+            .normalize("NFD")
+            .replace(/[\u0300-\u036f]/g, "")
+            .toLowerCase()
+            .trim();
+
+        for (const [key, obj] of porEntregador.entries()) {
+
+            const nomeExistente = String(obj.name || "")
+                .normalize("NFD")
+                .replace(/[\u0300-\u036f]/g, "")
+                .toLowerCase()
+                .trim();
+
+            if (nomeExistente === nomeNormalizado) {
+                rotaKey = key;
+                break;
+            }
+        }
+    }
+
+    if (!porEntregador.has(rotaKey)) {
+        porEntregador.set(
+            rotaKey,
+            {
+                name: rotaNome,
+                list: []
+            }
+        );
+    }
+
+    const entregasReais = porEntregador.get(rotaKey).list;
+    const usadas = new Set();
+
+    const normalizarCliente = nome =>
+        String(nome || "")
+            .normalize("NFD")
+            .replace(/[\u0300-\u036f]/g, "")
+            .toLowerCase()
+            .trim();
+
+    const listaPlanejada = (rota.clientes || []).map(nomeCliente => {
+
+        const chaveCliente = normalizarCliente(nomeCliente);
+
+        const indiceCorrespondente = entregasReais.findIndex(
+            (item, indice) =>
+                !usadas.has(indice) &&
+                item.confirmado &&
+                normalizarCliente(item.cliente) === chaveCliente
+        );
+
+        if (indiceCorrespondente !== -1) {
+
+            usadas.add(indice);
+
+            return entregasReais[indice];
+        }
+
+        return {
+            cliente: nomeCliente,
+            valor: null,
+            hora: null,
+            timestamp: -1,
+            nota: null,
+            confirmado: false
+        };
+    });
+
+    // Entregas feitas que não estavam na pré-tabela
+    const extras = entregasReais.filter(
+        (_, indice) => !usadas.has(indice)
+    );
+
+    porEntregador.set(
+        rotaKey,
+        {
+            name: rotaNome,
+            list: [
+                ...listaPlanejada,
+                ...extras
+            ]
+        }
+    );
+});
 
             // O que sobrou de entrega real (não estava na rota planejada) entra depois, como "extra"
             const extras = entregasReais.filter((_, i) => !usadas.has(i));
@@ -2501,8 +2621,26 @@ document.addEventListener("DOMContentLoaded", async () => {
         // ordem em que os clientes foram adicionados na rota (nunca reordena
         // por horário, nem depois de todos confirmados). Só entregador SEM
         // rota nenhuma cai pra ordem cronológica de entrega.
-        const entregadoresComRota = new Set(rotasPlanejadas.map(r => (r.entregadorId ? `id:${r.entregadorId}` : `name:${(r.entregador || '').trim()}`)));
-        porEntregador.forEach((obj, key) => {
+const entregadoresComRota = new Set();
+
+rotasPlanejadas.forEach(rota => {
+
+    if (rota.entregadorId) {
+        entregadoresComRota.add(
+            `id:${String(rota.entregadorId)}`
+        );
+    }
+
+    if (rota.entregador) {
+        entregadoresComRota.add(
+            `name:${String(rota.entregador)
+                .trim()
+                .toLowerCase()}`
+        );
+    }
+});
+
+porEntregador.forEach((obj, key) => {
             if (entregadoresComRota.has(key)) return; // mantém a ordem da rota
             obj.list.sort((a, b) => a.timestamp - b.timestamp);
         });
