@@ -2454,8 +2454,11 @@ document.addEventListener("DOMContentLoaded", async () => {
         const porEntregador = new Map(); // key -> { name, list }
 
         notasNoPeriodo.forEach(nota => {
-    const nomeEntregador = obterNomeEntregador(nota);
-
+    const nomeEntregador = String(
+    nota.entregador ||
+    obterNomeEntregador(nota) ||
+    "Não informado"
+).trim();
     // O ID é a chave principal.
     // Só usamos o nome para notas antigas que não possuem ID.
     const entregadorId = nota.entregadorId || nota.entregador_id || null;
