@@ -2585,9 +2585,9 @@ document.addEventListener("DOMContentLoaded", async () => {
 
         if (indiceCorrespondente !== -1) {
 
-            usadas.add(indice);
+            usadas.add(indiceCorrespondente);
 
-            return entregasReais[indice];
+            return entregasReais[indiceCorrespondente];
         }
 
         return {
