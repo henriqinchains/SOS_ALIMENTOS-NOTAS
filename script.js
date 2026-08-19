@@ -2602,12 +2602,6 @@ document.addEventListener("DOMContentLoaded", async () => {
     );
 });
 
-            // O que sobrou de entrega real (não estava na rota planejada) entra depois, como "extra"
-            const extras = entregasReais.filter((_, i) => !usadas.has(i));
-
-            porEntregador.set(rotaKey, { name: rotaNome, list: [...listaPlanejada, ...extras] });
-        });
-
         if (porEntregador.size === 0) {
             const aviso = document.createElement("p");
             aviso.classList.add("sem-notas-txt");
