@@ -57,7 +57,12 @@ function obterNomeEntregador(nota) {
 
     // 1. PRIMEIRO: tenta resolver pelo ID.
     // O ID é a identificação real do entregador.
-    const id = nota.entregadorId || nota.entregador_id || null;
+    // Obs.: quando populado pelo backend, entregadorId vem como objeto
+    // { _id, nome } em vez de string — precisa extrair o _id antes de comparar.
+    const idBruto = nota.entregadorId || nota.entregador_id || null;
+    const id = idBruto && typeof idBruto === "object"
+        ? (idBruto._id || idBruto.id || null)
+        : idBruto;
 
     if (id && Array.isArray(todosEntregadores)) {
         const encontrado = todosEntregadores.find(
@@ -2461,7 +2466,14 @@ document.addEventListener("DOMContentLoaded", async () => {
 ).trim();
     // O ID é a chave principal.
     // Só usamos o nome para notas antigas que não possuem ID.
-    const entregadorId = nota.entregadorId || nota.entregador_id || null;
+    // Obs.: quando o backend popula entregadorId, ele vira um objeto
+    // { _id, nome } em vez de uma string — sem extrair o _id aqui, todas as
+    // notas caiam na mesma chave "id:[object Object]" e ficavam agrupadas
+    // sob um único entregador.
+    const entregadorIdBruto = nota.entregadorId || nota.entregador_id || null;
+    const entregadorId = entregadorIdBruto && typeof entregadorIdBruto === "object"
+        ? (entregadorIdBruto._id || entregadorIdBruto.id || null)
+        : entregadorIdBruto;
 
     const key = entregadorId
         ? `id:${String(entregadorId)}`
