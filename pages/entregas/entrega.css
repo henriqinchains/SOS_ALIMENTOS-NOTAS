@@ -445,6 +445,25 @@ button#btnEnviar:disabled {
     color: var(--dourado-escuro);
 }
 
+/* ---------- Indicador da fila de envio pendente ---------- */
+
+.fila-pendentes {
+    margin: -8px 0 20px;
+    font-family: var(--fonte-utilitaria);
+    font-size: 11.5px;
+    letter-spacing: 0.01em;
+    display: none;
+}
+
+.fila-pendentes--ativa {
+    display: block;
+    padding: 8px 12px;
+    border-radius: 3px;
+    background: rgba(76, 122, 74, 0.1);
+    border: 1px dashed var(--folha);
+    color: var(--verde-mata-2);
+}
+
 
 @media (prefers-reduced-motion: reduce) {
     * {
