@@ -3006,7 +3006,6 @@ porEntregador.forEach((obj, key) => {
         function adicionarClienteAoBloco(nome) {
             const nomeLimpo = String(nome || "").trim();
             if (!nomeLimpo) return;
-            if (clientesDoBloco.some(c => normalizarBuscaRota(c) === normalizarBuscaRota(nomeLimpo))) return;
 
             clientesDoBloco.push(nomeLimpo);
             persistirNomeExtraClienteRota(nomeLimpo);
@@ -3021,8 +3020,6 @@ porEntregador.forEach((obj, key) => {
             const texto = normalizarBuscaRota(inputBusca.value);
             listaSugestoes.innerHTML = "";
 
-            const jaAdicionados = new Set(clientesDoBloco.map(normalizarBuscaRota));
-
             const nomesConhecidos = [
                 ...todosClientes.map(c => c.cliente),
                 ...obterNomesExtrasClientesRota()
@@ -3032,9 +3029,7 @@ porEntregador.forEach((obj, key) => {
             const encontrados = nomesUnicos
                 .filter(nomeCliente => {
                     const nome = normalizarBuscaRota(nomeCliente);
-                    return nome &&
-                        !jaAdicionados.has(nome) &&
-                        (!texto || nome.includes(texto));
+                    return nome && (!texto || nome.includes(texto));
                 })
                 .sort((a, b) => String(a).localeCompare(String(b), "pt-BR"))
                 .slice(0, 12);
