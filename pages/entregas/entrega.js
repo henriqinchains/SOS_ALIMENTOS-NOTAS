@@ -5,7 +5,7 @@ const CHAVE_FILA = "notasPendentes";
 // correção for publicada (front e/ou back), muda esse valor nos dois
 // lugares — qualquer aba com entrega.html aberta detecta a diferença
 // sozinha e recarrega automaticamente em até INTERVALO_VERSAO_MS.
-const VERSAO_APP = "2026-09-11-1";
+const VERSAO_APP = "2026-09-12-2";
 const INTERVALO_VERSAO_MS = 2 * 60 * 1000; // checa a cada 2 minutos
 
 // Atrasos entre tentativas de reenvio: 15s, depois 30s, depois 40s.
@@ -331,6 +331,54 @@ function proximoAtraso(tentativas) {
     return ATRASOS_RETRY_MS[indice];
 }
 
+// Uma nota só pode ser enviada se tiver uma imagem válida em base64.
+// Notas de antes dessa correção (ou qualquer outra corrompida por algum
+// motivo) guardaram a imagem de um jeito que não sobreviveu no
+// localStorage — pra essas, tentar de novo NUNCA vai dar certo.
+function notaTemImagemValida(nota) {
+    return typeof nota.imgBase64 === "string" && nota.imgBase64.startsWith("data:");
+}
+
+// Uma nota é "de hoje" se foi criada depois da meia-noite (hora local) de
+// hoje. Roda toda vez que a página carrega — não só uma vez — como rede de
+// segurança permanente.
+function notaEDeHoje(nota) {
+    const inicioDeHoje = new Date();
+    inicioDeHoje.setHours(0, 0, 0, 0);
+    return (nota.idLocal || 0) >= inicioDeHoje.getTime();
+}
+
+// Varre a fila ao carregar a página e descarta: (1) qualquer nota de antes
+// de hoje — se ainda está pendente, o entregador já deve ter refeito essa
+// entrega na mão, então reenviá-la geraria duplicata — e (2) qualquer nota
+// sem imagem válida, que nunca vai conseguir ser enviada de jeito nenhum.
+function limparFilaAntigaOuIrrecuperavel() {
+    const notas = obterFila();
+    const mantidas = notas.filter(n => notaEDeHoje(n) && notaTemImagemValida(n));
+    const removidasPorSerAntiga = notas.filter(n => !notaEDeHoje(n)).length;
+    const removidasPorImagem = notas.filter(n => notaEDeHoje(n) && !notaTemImagemValida(n)).length;
+    const totalRemovidas = notas.length - mantidas.length;
+
+    if (totalRemovidas > 0) {
+        salvarFila(mantidas);
+
+        const partes = [];
+        if (removidasPorSerAntiga > 0) {
+            partes.push(`${removidasPorSerAntiga} de antes de hoje (evitando duplicata)`);
+        }
+        if (removidasPorImagem > 0) {
+            partes.push(`${removidasPorImagem} sem imagem salva`);
+        }
+
+        mostrarFeedback(
+            `${totalRemovidas} nota${totalRemovidas > 1 ? "s" : ""} removida${totalRemovidas > 1 ? "s" : ""} da fila: ${partes.join(" e ")}.`,
+            "erro"
+        );
+    }
+
+    return totalRemovidas;
+}
+
 // =========================
 // Indicador visual da fila
 // =========================
@@ -416,6 +464,16 @@ async function enviarNotaServidor(nota) {
 // deixar o entregador achar que "está tudo enviando" silenciosamente.
 async function tentarEnviarNota(nota) {
     if (idsEmEnvio.has(nota.idLocal)) return;
+
+    if (!notaTemImagemValida(nota) || !notaEDeHoje(nota)) {
+        // Trava de segurança: mesmo que essa nota tenha passado pela
+        // varredura inicial, se ela não tem imagem válida OU já é de um
+        // dia anterior (o entregador já deve ter refeito na mão — reenviar
+        // geraria duplicata), não adianta tentar de novo — descarta.
+        removerNotaFila(nota.idLocal);
+        atualizarIndicadorFila();
+        return;
+    }
 
     idsEmEnvio.add(nota.idLocal);
     atualizarIndicadorFila();
@@ -611,6 +669,11 @@ formEntrega.addEventListener("submit", async (e) => {
 
     await carregarClientes();
     restaurarRascunho();
+
+    // Descarta de cara qualquer nota antiga que nunca vai conseguir ser
+    // enviada (ex: da época em que a imagem não sobrevivia no
+    // localStorage), pra não ficar presa reprocessando pra sempre.
+    limparFilaAntigaOuIrrecuperavel();
 
     // Retoma qualquer nota que ficou pendente de uma sessão anterior
     // (ex: o entregador fechou o app ou perdeu sinal antes de terminar).
