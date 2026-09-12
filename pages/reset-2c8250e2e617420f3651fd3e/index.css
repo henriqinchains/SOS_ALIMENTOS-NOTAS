@@ -1,0 +1,263 @@
+@import url("https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600;9..144,700&family=Work+Sans:wght@400;500;600&family=Space+Mono:wght@400;700&display=swap");
+
+:root {
+    --verde-mata: #142A20;
+    --verde-mata-2: #1D3B2C;
+    --papel: #FAF3E2;
+    --papel-sombra: #EDE3C8;
+    --tinta: #20291F;
+    --tinta-suave: #5C6B58;
+    --dourado: #E3A23C;
+    --dourado-escuro: #B9772A;
+    --tomate: #C1442E;
+    --folha: #4C7A4A;
+
+    --fonte-display: "Fraunces", serif;
+    --fonte-texto: "Work Sans", sans-serif;
+    --fonte-utilitaria: "Space Mono", monospace;
+}
+
+* {
+    box-sizing: border-box;
+}
+
+html,
+body {
+    height: 100%;
+    width: 100%;
+    overflow: hidden;
+    position: fixed;
+    inset: 0;
+    overscroll-behavior: none;
+}
+
+body {
+    margin: 0;
+    font-family: var(--fonte-texto);
+    color: var(--tinta);
+    background-color: var(--verde-mata);
+    background-image:
+        radial-gradient(circle at 1px 1px, rgba(250, 243, 226, 0.08) 1px, transparent 0);
+    background-size: 22px 22px;
+}
+
+.page-shell {
+    min-height: 100vh;
+    min-height: 100dvh;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 32px 20px;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior: contain;
+}
+
+/* ---------- Cartão ---------- */
+
+.login-card {
+    position: relative;
+    width: 100%;
+    max-width: 400px;
+    background: var(--papel);
+    border-radius: 4px;
+    padding: 48px 40px 40px;
+    box-shadow:
+        0 1px 0 rgba(255, 255, 255, 0.4) inset,
+        0 30px 60px -20px rgba(6, 16, 10, 0.55);
+    border: 1px solid rgba(20, 42, 32, 0.08);
+    overflow: visible;
+}
+
+.login-card::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    left: 28px;
+    right: 28px;
+    height: 0;
+    border-top: 2px dashed var(--papel-sombra);
+    top: 22px;
+}
+
+.eyebrow {
+    font-family: var(--fonte-utilitaria);
+    font-size: 11px;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--dourado-escuro);
+    margin: 0 0 6px;
+}
+
+h1 {
+    font-family: var(--fonte-display);
+    font-optical-sizing: auto;
+    font-weight: 600;
+    font-size: 32px;
+    line-height: 1.1;
+    margin: 0 0 10px;
+    color: var(--tinta);
+}
+
+h1 span {
+    color: var(--folha);
+    font-weight: 700;
+}
+
+.subtitle {
+    font-size: 14px;
+    color: var(--tinta-suave);
+    margin: 0 0 32px;
+}
+
+/* ---------- Selo ---------- */
+
+.login-card .selo {
+    position: absolute;
+    top: -18px;
+    right: -14px;
+    width: 74px;
+    height: 74px;
+    border-radius: 50%;
+    border: 2px dashed var(--tomate);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transform: rotate(-10deg);
+    background: var(--papel);
+    color: var(--tomate);
+    font-family: var(--fonte-utilitaria);
+    font-size: 9px;
+    letter-spacing: 0.05em;
+    text-align: center;
+    line-height: 1.3;
+    text-transform: uppercase;
+    box-shadow: 0 6px 14px -6px rgba(193, 68, 46, 0.4);
+    user-select: none;
+}
+
+/* ---------- Formulário ---------- */
+
+form {
+    display: flex;
+    flex-direction: column;
+}
+
+label {
+    font-family: var(--fonte-utilitaria);
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: var(--tinta-suave);
+    margin-bottom: 6px;
+}
+
+label:not(:first-of-type) {
+    margin-top: 18px;
+}
+
+input {
+    font-family: var(--fonte-texto);
+    font-size: 15px;
+    padding: 12px 14px;
+    border: 1.5px solid var(--papel-sombra);
+    border-radius: 3px;
+    background: #fff;
+    color: var(--tinta);
+    outline: none;
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+input::placeholder {
+    color: #b9b2a0;
+}
+
+input:focus {
+    border-color: var(--folha);
+    box-shadow: 0 0 0 3px rgba(76, 122, 74, 0.18);
+}
+
+input:focus-visible {
+    outline: 2px solid var(--folha);
+    outline-offset: 2px;
+}
+
+button#reset-button {
+    margin-top: 26px;
+    font-family: var(--fonte-texto);
+    font-weight: 600;
+    font-size: 15px;
+    padding: 13px 18px;
+    border: none;
+    border-radius: 3px;
+    background: var(--dourado);
+    color: #241605;
+    cursor: pointer;
+    transition: background 0.15s ease, transform 0.1s ease;
+}
+
+button#reset-button:hover:not(:disabled) {
+    background: var(--dourado-escuro);
+    color: var(--papel);
+}
+
+button#reset-button:active:not(:disabled) {
+    transform: translateY(1px);
+}
+
+button#reset-button:focus-visible {
+    outline: 2px solid var(--folha);
+    outline-offset: 2px;
+}
+
+button#reset-button:disabled {
+    opacity: 0.7;
+    cursor: wait;
+}
+
+/* ---------- Mensagens de status ---------- */
+
+#reset-message {
+    font-family: var(--fonte-utilitaria);
+    font-size: 12.5px;
+    margin: 16px 0 0;
+    padding: 10px 12px;
+    border-radius: 3px;
+    text-align: center;
+    letter-spacing: 0.01em;
+}
+
+.reset-message--erro {
+    color: var(--tomate);
+    background: rgba(193, 68, 46, 0.1);
+    border: 1px solid rgba(193, 68, 46, 0.25);
+}
+
+.reset-message--sucesso {
+    color: var(--folha);
+    background: rgba(76, 122, 74, 0.12);
+    border: 1px solid rgba(76, 122, 74, 0.28);
+}
+
+.reset-message--pendente {
+    color: var(--tinta-suave);
+    background: rgba(32, 41, 31, 0.06);
+    border: 1px solid rgba(32, 41, 31, 0.12);
+}
+
+@media (prefers-reduced-motion: reduce) {
+    * {
+        transition: none !important;
+    }
+}
+
+@media (max-width: 420px) {
+    .login-card {
+        padding: 40px 26px 32px;
+    }
+
+    h1 {
+        font-size: 27px;
+    }
+}
