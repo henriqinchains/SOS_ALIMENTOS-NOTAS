@@ -1,4 +1,4 @@
-const API_URL = `${API_URL}`;
+const API_URL = "https://sos-alimentos-servidor.onrender.com/api";
 
 const links = document.querySelectorAll(".nav-links a");
 const sections = document.querySelectorAll("main section");
