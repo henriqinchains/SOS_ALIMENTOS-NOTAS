@@ -1,3 +1,5 @@
+const API_URL = `${API_URL}`;
+
 const links = document.querySelectorAll(".nav-links a");
 const sections = document.querySelectorAll("main section");
 
@@ -167,7 +169,7 @@ function limparFeedbackCliente() {
 
 async function verificarSessao() {
     try {
-        const resposta = await fetch("https://sos-alimentos-servidor.onrender.com/api/auth/me",
+        const resposta = await fetch(`${API_URL}/auth/me`,
             {
                 method: "GET",
                 credentials: "include",
@@ -531,7 +533,7 @@ async function confirmarImportacaoCsv() {
     }
 
     try {
-        const resposta = await fetchAutenticado("https://sos-alimentos-servidor.onrender.com/api/clientes/importar-lote", {
+        const resposta = await fetchAutenticado(`${API_URL}/clientes/importar-lote`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             credentials: "include",
@@ -564,7 +566,11 @@ async function confirmarImportacaoCsv() {
 
     } catch (erro) {
         console.error(erro);
-        mostrarFeedbackCliente("Não foi possível importar o CSV. Verifique sua conexão e tente novamente.", "erro");
+        mostrarFeedbackCliente(
+            "Não foi possível confirmar se a importação terminou (erro de conexão) — isso não quer dizer que ela falhou, o servidor pode ter processado mesmo assim. Confira a lista de clientes: se os nomes que faltavam já estiverem lá, não precisa reimportar. Também é seguro simplesmente tentar de novo — clientes já cadastrados nunca são duplicados.",
+            "erro"
+        );
+        carregarClientes(); // recarrega a lista pra facilitar a conferência
     } finally {
         if (btnConfirmar) {
             btnConfirmar.disabled = false;
@@ -1096,8 +1102,8 @@ document.addEventListener("DOMContentLoaded", async () => {
                 }
 
                 const url = editando
-                    ? `https://sos-alimentos-servidor.onrender.com/api/clientes/${clienteEmEdicao._id}`
-                    : "https://sos-alimentos-servidor.onrender.com/api/clientes";
+                    ? `${API_URL}/clientes/${clienteEmEdicao._id}`
+                    : `${API_URL}/clientes`;
 
                 const resposta = await fetchAutenticado(url, {
                     method: editando ? "PUT" : "POST",
@@ -1170,7 +1176,7 @@ document.addEventListener("DOMContentLoaded", async () => {
             btnSubmitNota.innerText = "Enviando...";
 
             try {
-                const resposta = await fetchAutenticado("https://sos-alimentos-servidor.onrender.com/api/notas", {
+                const resposta = await fetchAutenticado(`${API_URL}/notas`, {
                     method: "POST",
                     credentials: "include",
                     body: formData
@@ -1215,7 +1221,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     async function carregarEntregadores() {
         try {
             const resposta = await fetchAutenticado(
-                "https://sos-alimentos-servidor.onrender.com/api/usuarios/entregadores",
+                `${API_URL}/usuarios/entregadores`,
                 {
                     credentials: "include"
                 }
@@ -1281,7 +1287,7 @@ document.addEventListener("DOMContentLoaded", async () => {
     async function carregarClientes() {
         try {
             clientesConteudo.innerHTML = "Carregando...";
-            const resposta = await fetchAutenticado("https://sos-alimentos-servidor.onrender.com/api/clientes", { credentials: "include" });
+            const resposta = await fetchAutenticado(`${API_URL}/clientes`, { credentials: "include" });
             const clientes = await resposta.json();
             todosClientes = clientes;
             renderClientes(clientes);
@@ -1367,7 +1373,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 
     async function buscarNumeroNota(cliente) {
         try {
-            const resposta = await fetchAutenticado(`https://sos-alimentos-servidor.onrender.com/api/notas?_=${Date.now()}`, { credentials: "include" });
+            const resposta = await fetchAutenticado(`${API_URL}/notas?_=${Date.now()}`, { credentials: "include" });
             const notas = await resposta.json();
 
             // Mesmo critério usado em carregarNotasDoCliente/renderAbasNotas:
@@ -1766,7 +1772,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 
                                 const resposta =
                                     await fetchAutenticado(
-                                        `https://sos-alimentos-servidor.onrender.com/api/clientes/${cliente._id}`,
+                                        `${API_URL}/clientes/${cliente._id}`,
                                         {
                                             method: "DELETE",
                                             credentials: "include"
@@ -1853,7 +1859,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 
         contadorNotasPorCliente = new Map();
 
-        const respostaNotas = await fetchAutenticado(`https://sos-alimentos-servidor.onrender.com/api/notas?_=${Date.now()}`, { credentials: "include" });
+        const respostaNotas = await fetchAutenticado(`${API_URL}/notas?_=${Date.now()}`, { credentials: "include" });
         const notas = await respostaNotas.json();
 
         const quantidadeNotas = {};
@@ -2053,7 +2059,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 
         try {
             const resposta = await fetchAutenticado(
-                `https://sos-alimentos-servidor.onrender.com/api/notas/lixeira?_=${Date.now()}`,
+                `${API_URL}/notas/lixeira?_=${Date.now()}`,
                 { credentials: "include" }
             );
             if (!resposta.ok) throw new Error("Não foi possível carregar a lixeira.");
@@ -2108,7 +2114,7 @@ document.addEventListener("DOMContentLoaded", async () => {
                     try {
                         const respostas = await Promise.all(
                             ids.map(id => fetchAutenticado(
-                                `https://sos-alimentos-servidor.onrender.com/api/notas/${id}/permanente`,
+                                `${API_URL}/notas/${id}/permanente`,
                                 { method: "DELETE", credentials: "include" }
                             ))
                         );
@@ -2214,7 +2220,7 @@ document.addEventListener("DOMContentLoaded", async () => {
             if (!confirm("Restaurar esta nota? Ela volta a aparecer normalmente.")) return;
             try {
                 const resposta = await fetchAutenticado(
-                    `https://sos-alimentos-servidor.onrender.com/api/notas/${nota._id}/restaurar`,
+                    `${API_URL}/notas/${nota._id}/restaurar`,
                     { method: "PUT", credentials: "include" }
                 );
                 if (!resposta.ok) throw new Error("Erro ao restaurar nota.");
@@ -2229,7 +2235,7 @@ document.addEventListener("DOMContentLoaded", async () => {
             if (!confirm("Excluir esta nota DEFINITIVAMENTE? Essa ação não pode ser desfeita.")) return;
             try {
                 const resposta = await fetchAutenticado(
-                    `https://sos-alimentos-servidor.onrender.com/api/notas/${nota._id}/permanente`,
+                    `${API_URL}/notas/${nota._id}/permanente`,
                     { method: "DELETE", credentials: "include" }
                 );
                 if (!resposta.ok) throw new Error("Erro ao excluir nota permanentemente.");
@@ -2275,7 +2281,7 @@ document.addEventListener("DOMContentLoaded", async () => {
         if (faturamentoToolbar) faturamentoToolbar.innerHTML = "";
 
         try {
-            const resposta = await fetchAutenticado(`https://sos-alimentos-servidor.onrender.com/api/notas?_=${Date.now()}`, { credentials: "include" });
+            const resposta = await fetchAutenticado(`${API_URL}/notas?_=${Date.now()}`, { credentials: "include" });
             notasFaturamentoCache = await resposta.json();
 
             if (faturamentoToolbar) montarToolbarFaturamento(faturamentoToolbar);
@@ -2727,7 +2733,7 @@ porEntregador.forEach((obj, key) => {
     // vem depois. Até lá, isso simplesmente retorna vazio (sem quebrar a tela).
     async function buscarRotasPlanejadas(data) {
         try {
-            const resposta = await fetchAutenticado(`https://sos-alimentos-servidor.onrender.com/api/rotas-planejadas?data=${data}`, { credentials: "include" });
+            const resposta = await fetchAutenticado(`${API_URL}/rotas-planejadas?data=${data}`, { credentials: "include" });
             if (!resposta.ok) return [];
             return await resposta.json();
         } catch (erro) {
@@ -3188,7 +3194,7 @@ porEntregador.forEach((obj, key) => {
                 // -------------------------------------------------
 
                 const resposta = await fetchAutenticado(
-                    "https://sos-alimentos-servidor.onrender.com/api/rotas-planejadas",
+                    `${API_URL}/rotas-planejadas`,
                     {
                         method: "POST",
 
@@ -3622,7 +3628,7 @@ porEntregador.forEach((obj, key) => {
         if (!confirmar) return;
 
         try {
-            const respostaGrupos = await fetchAutenticado(`https://sos-alimentos-servidor.onrender.com/api/grupos?idCliente=${clienteAlvo._id}&_=${Date.now()}`, { credentials: "include" });
+            const respostaGrupos = await fetchAutenticado(`${API_URL}/grupos?idCliente=${clienteAlvo._id}&_=${Date.now()}`, { credentials: "include" });
             const gruposAtuais = respostaGrupos.ok ? await respostaGrupos.json() : [];
             const grupoAtual = gruposAtuais.find(g => String(g._id) === String(grupoId));
 
@@ -3638,13 +3644,13 @@ porEntregador.forEach((obj, key) => {
 
             if (notasIdRestantes.length === 0) {
                 // Grupo ficaria vazio: exclui o grupo em vez de deixar um card sem notas
-                const resposta = await fetchAutenticado(`https://sos-alimentos-servidor.onrender.com/api/grupos/${grupoAtual._id}`, {
+                const resposta = await fetchAutenticado(`${API_URL}/grupos/${grupoAtual._id}`, {
                     method: "DELETE",
                     credentials: "include"
                 });
                 if (!resposta.ok) throw new Error();
             } else {
-                const resposta = await fetchAutenticado(`https://sos-alimentos-servidor.onrender.com/api/grupos/${grupoAtual._id}`, {
+                const resposta = await fetchAutenticado(`${API_URL}/grupos/${grupoAtual._id}`, {
                     method: "PUT",
                     headers: { "Content-Type": "application/json" },
                     credentials: "include",
@@ -3676,7 +3682,7 @@ porEntregador.forEach((obj, key) => {
         try {
             await Promise.all(
                 notasIdExcluir.map(id =>
-                    fetchAutenticado(`https://sos-alimentos-servidor.onrender.com/api/notas/${id}`, { method: "PUT", headers: { "Content-Type": "application/json" }, credentials: "include", body: JSON.stringify({ deletado: true }) })
+                    fetchAutenticado(`${API_URL}/notas/${id}`, { method: "PUT", headers: { "Content-Type": "application/json" }, credentials: "include", body: JSON.stringify({ deletado: true }) })
                 )
             );
 
@@ -3705,7 +3711,7 @@ porEntregador.forEach((obj, key) => {
 
         try {
             // Busca o grupo direto do backend (evita mesclar com uma versão desatualizada)
-            const respostaGrupos = await fetchAutenticado(`https://sos-alimentos-servidor.onrender.com/api/grupos?idCliente=${clienteAlvo._id}&_=${Date.now()}`, { credentials: "include" });
+            const respostaGrupos = await fetchAutenticado(`${API_URL}/grupos?idCliente=${clienteAlvo._id}&_=${Date.now()}`, { credentials: "include" });
             const gruposAtuais = respostaGrupos.ok ? await respostaGrupos.json() : [];
             const grupoAtual = gruposAtuais.find(g => String(g._id) === String(grupoId));
 
@@ -3719,7 +3725,7 @@ porEntregador.forEach((obj, key) => {
             const notasIdExistentes = (grupoAtual.notasId || []).map(id => String(id));
             const notasIdFinal = Array.from(new Set([...notasIdExistentes, ...notasIdNovas]));
 
-            const resposta = await fetchAutenticado(`https://sos-alimentos-servidor.onrender.com/api/grupos/${grupoAtual._id}`, {
+            const resposta = await fetchAutenticado(`${API_URL}/grupos/${grupoAtual._id}`, {
                 method: "PUT",
                 headers: { "Content-Type": "application/json" },
                 credentials: "include",
@@ -3750,7 +3756,7 @@ porEntregador.forEach((obj, key) => {
         const clienteAlvo = clienteSelecaoAtivo;
 
         try {
-            const resposta = await fetchAutenticado("https://sos-alimentos-servidor.onrender.com/api/grupos", {
+            const resposta = await fetchAutenticado(`${API_URL}/grupos`, {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 credentials: "include",
@@ -3828,7 +3834,7 @@ porEntregador.forEach((obj, key) => {
             if (!confirmar) return;
 
             try {
-                const resposta = await fetchAutenticado(`https://sos-alimentos-servidor.onrender.com/api/grupos/${grupo._id}`, {
+                const resposta = await fetchAutenticado(`${API_URL}/grupos/${grupo._id}`, {
                     method: "DELETE",
                     credentials: "include"
                 });
@@ -3922,7 +3928,7 @@ porEntregador.forEach((obj, key) => {
             if (novaObservacao === null) return; // cancelou
 
             try {
-                const resposta = await fetchAutenticado(`https://sos-alimentos-servidor.onrender.com/api/grupos/${grupo._id}`, {
+                const resposta = await fetchAutenticado(`${API_URL}/grupos/${grupo._id}`, {
                     method: "PUT",
                     headers: { "Content-Type": "application/json" },
                     credentials: "include",
@@ -3971,7 +3977,7 @@ porEntregador.forEach((obj, key) => {
 
                 btnPago.disabled = true;
 
-                fetchAutenticado(`https://sos-alimentos-servidor.onrender.com/api/notas/${nota._id}/pago`, {
+                fetchAutenticado(`${API_URL}/notas/${nota._id}/pago`, {
                     method: "PUT",
                     credentials: "include"
                 })
@@ -4008,7 +4014,7 @@ porEntregador.forEach((obj, key) => {
                 if (botaoDisparo) botaoDisparo.disabled = true;
 
                 try {
-                    const resposta = await fetchAutenticado(`https://sos-alimentos-servidor.onrender.com/api/notas/${nota._id}`, {
+                    const resposta = await fetchAutenticado(`${API_URL}/notas/${nota._id}`, {
                         method: "DELETE",
                         credentials: "include"
                     });
@@ -4191,8 +4197,8 @@ porEntregador.forEach((obj, key) => {
             }
 
             const [respostaNotas, respostaGrupos] = await Promise.all([
-                fetchAutenticado(`https://sos-alimentos-servidor.onrender.com/api/notas?_=${Date.now()}`, { credentials: "include" }),
-                fetchAutenticado(`https://sos-alimentos-servidor.onrender.com/api/grupos?idCliente=${clienteAlvo._id}&_=${Date.now()}`, { credentials: "include" })
+                fetchAutenticado(`${API_URL}/notas?_=${Date.now()}`, { credentials: "include" }),
+                fetchAutenticado(`${API_URL}/grupos?idCliente=${clienteAlvo._id}&_=${Date.now()}`, { credentials: "include" })
             ]);
 
             const notas = await respostaNotas.json();
