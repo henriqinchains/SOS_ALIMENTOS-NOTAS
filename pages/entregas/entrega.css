@@ -464,6 +464,16 @@ button#btnEnviar:disabled {
     color: var(--verde-mata-2);
 }
 
+.fila-pendentes--urgente {
+    display: block;
+    padding: 10px 12px;
+    border-radius: 3px;
+    background: rgba(193, 68, 46, 0.15);
+    border: 1.5px solid var(--tomate);
+    color: var(--tomate);
+    font-weight: 600;
+}
+
 
 @media (prefers-reduced-motion: reduce) {
     * {
