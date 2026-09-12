@@ -1,939 +1,619 @@
-require("dotenv").config();
+const API_URL = "https://sos-alimentos-servidor.onrender.com/api";
+const CHAVE_FILA = "notasPendentes";
 
-const express = require('express');
-const mongoose = require('mongoose');
-const cors = require('cors');
-const multer = require("multer");
-const streamifier = require("streamifier");
-const cloudinary = require('cloudinary').v2;
-const cookieParser = require("cookie-parser");
-const jwt = require("jsonwebtoken");
-const bcrypt = require("bcrypt");
-
-const app = express();
-
-app.use(express.json());
-
-//ACORDA
-app.get("/health", (req, res) => {
-    res.status(200).send("OK");
-});
-
-// Versão atual do app — usada pelas telas que ficam abertas o dia todo
-// (ex: registro de entrega) pra detectar sozinhas quando existe uma
-// atualização publicada e se recarregar automaticamente. Muda esse valor
-// (ex: data + sequencial) toda vez que publicar uma correção no frontend.
+// Precisa bater com a constante VERSAO_APP do server.js. Toda vez que uma
+// correção for publicada (front e/ou back), muda esse valor nos dois
+// lugares — qualquer aba com entrega.html aberta detecta a diferença
+// sozinha e recarrega automaticamente em até INTERVALO_VERSAO_MS.
 const VERSAO_APP = "2026-09-11-1";
+const INTERVALO_VERSAO_MS = 2 * 60 * 1000; // checa a cada 2 minutos
 
-app.get("/api/versao", (req, res) => {
-    res.json({ versao: VERSAO_APP });
-});
+// Atrasos entre tentativas de reenvio: 15s, depois 30s, depois 40s.
+// Se ainda falhar depois disso, continua tentando a cada 40s (não desiste).
+const ATRASOS_RETRY_MS = [15000, 30000, 40000];
+const INTERVALO_TICKER_MS = 5000;
 
-mongoose
-    .connect(process.env.MONGO_URL, { family: 4 })
-    .then(() => console.log("✅ Conectado ao MongoDB com sucesso!"))
-    .catch((err) => console.log("❌ Erro ao conectar no banco:", err));
+const formEntrega = document.getElementById("form-entrega");
+const inputCliente = document.getElementById("cliente");
+const inputValor = document.getElementById("valorNota");
+const inputImagem = document.getElementById("imagemNota");
+const inputNotaJaPaga = document.getElementById("notaJaPagaEntrega");
+const btnNotaJaPaga = document.getElementById("btnNotaJaPagaEntrega");
+const nomeArquivo = document.getElementById("nomeArquivo");
+const listaClientes = document.getElementById("lista-clientes");
+const feedback = document.getElementById("feedback");
+const btnEnviar = document.getElementById("btnEnviar");
+const filaPendentesEl = document.getElementById("fila-pendentes");
 
-cloudinary.config({
-    cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
-    api_key: process.env.CLOUDINARY_API_KEY,
-    api_secret: process.env.CLOUDINARY_API_SECRET,
-});
+let todosClientes = [];
+let clienteSelecionado = null;
+let numeroNota = 1;
+let entregadorAtual = null;
 
-const storage = multer.memoryStorage();
-const upload = multer({
-    storage,
-    limits: {
-        fileSize: 11 * 1024 * 1024 // 11 MB
-    }
-});
+// idLocal das notas que estão sendo enviadas agora mesmo, pra não tentar
+// enviar a mesma nota duas vezes em paralelo (ex: ticker rodou enquanto um
+// envio anterior ainda estava em andamento).
+const idsEmEnvio = new Set();
 
-function uploadParaCloudinary(buffer) {
-    return new Promise((resolve, reject) => {
-        const stream = cloudinary.uploader.upload_stream(
-            { folder: "notas_fiscais" },
-            (error, result) => {
-                if (error) return reject(error);
-                resolve(result);
-            }
-        );
-        streamifier.createReadStream(buffer).pipe(stream);
-    });
+// Formata a data LOCAL (do celular) como "YYYY-MM-DD". new Date().toISOString()
+// converte pra UTC e "adianta" a data à noite (Brasil é UTC-3) — isso fazia
+// notas registradas depois das ~21h entrarem com a data de amanhã, quebrando
+// a Planejar Rota (que compara a data salva com a data local planejada).
+function obterDataLocalISO(data) {
+    const ano = data.getFullYear();
+    const mes = String(data.getMonth() + 1).padStart(2, "0");
+    const dia = String(data.getDate()).padStart(2, "0");
+    return `${ano}-${mes}-${dia}`;
 }
 
-const allowedOrigins = [
-    "https://henriqinchains.github.io",
-    "http://127.0.0.1:5500",
-    "http://localhost:5500",
-    "http://127.0.0.1:3000",
-    "http://localhost:3000",
-];
+// Função para mostrar feedback inline
+function mostrarFeedback(mensagem, tipo) {
+    feedback.textContent = mensagem;
+    feedback.className = "feedback feedback--" + tipo;
+}
 
-app.set("trust proxy", 1);
+// =========================
+// Rascunho do formulário (sessionStorage)
+// Protege contra o navegador recarregar a página sozinho — o que acontece
+// às vezes ao abrir a câmera (capture="environment") em celulares com pouca
+// memória. O campo Cliente tem autocomplete="off" (pra não misturar com
+// sugestão nativa do navegador), então ele NÃO se restaura sozinho nesse
+// tipo de recarregamento, diferente do campo Valor — daí o cliente sumir
+// "sozinho" enquanto o resto parece continuar preenchido.
+// =========================
+const CHAVE_RASCUNHO = "entrega_rascunho";
 
-app.use(
-    cors({
-        origin: function (origin, callback) {
-            if (!origin) return callback(null, true);
-            const isAllowed = allowedOrigins.some((allowedUrl) => origin.startsWith(allowedUrl));
-            if (isAllowed) {
-                callback(null, true);
-            } else {
-                callback(new Error("Bloqueado pelo CORS do SOS ALIMENTOS!"));
-            }
-        },
-        credentials: true,
-        methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-        allowedHeaders: ["Content-Type", "Authorization", "X-Requested-With", "Accept", "Origin"],
-    })
-);
-
-app.use(cookieParser());
-
-// Configuração central do cookie de sessão, usada tanto no login quanto no
-// cadastro — precisa ser IDÊNTICA nos dois, senão quem se cadastra pela
-// primeira vez recebe um cookie que não funciona no cenário cross-site
-// (frontend no GitHub Pages, API no Render).
-const COOKIE_OPTIONS = {
-    httpOnly: true,
-    secure: true,
-    sameSite: "none",
-    partitioned: true,
-    maxAge: 30 * 24 * 60 * 60 * 1000
-};
-
-// ==================== MIDDLEWARES DE AUTENTICAÇÃO ====================
-
-// Verifica se existe um token válido e anexa os dados do usuário em req.usuario
-function verificarLogin(req, res, next) {
-    const token = req.cookies.authToken;
-
-    if (!token) {
-        return res.status(401).json({
-            erro: "Acesso negado. Faça login novamente."
-        });
-    }
-
+function salvarRascunho() {
     try {
-        const decoded = jwt.verify(token, process.env.JWT_SECRET);
-        req.usuario = decoded;
-        next();
+        sessionStorage.setItem(CHAVE_RASCUNHO, JSON.stringify({
+            textoCliente: inputCliente.value,
+            idClienteSelecionado: clienteSelecionado ? clienteSelecionado._id : null,
+            valor: inputValor.value,
+            pago: inputNotaJaPaga ? inputNotaJaPaga.value : "false"
+        }));
     } catch (erro) {
-        return res.status(401).json({
-            erro: "Sessão inválida ou expirada. Faça login novamente."
-        });
+        console.error("Erro ao salvar rascunho do formulário:", erro);
     }
 }
 
-// Deve ser usado sempre DEPOIS de verificarLogin.
-// Recebe a lista de cargos permitidos, ex: verificarCargo("admin", "financeiro")
-function verificarCargo(...cargosPermitidos) {
-    return (req, res, next) => {
-        if (!cargosPermitidos.includes(req.usuario.cargo)) {
-            return res.status(403).json({ erro: "Você não tem permissão para acessar este recurso." });
-        }
-        next();
-    };
-}
-
-// ==================== MODELOS ====================
-
-//modelo cliente
-const ClienteSchema = new mongoose.Schema({
-    cliente: { type: String, required: true, unique: true },
-    email: { type: String, required: false, unique: true, sparse: true, lowercase: true, trim: true },
-    cnpj: { type: String, required: false },
-    telefone: { type: String, required: false },
-    endereco: { type: String, required: true },
-    bairro: { type: String, required: true },
-    complemento: { type: String, required: false },
-}, { timestamps: true });
-
-const Cliente = mongoose.model("Cliente", ClienteSchema, "clientes");
-
-//modelo nota fiscal
-const NotasFiscaisSchema = new mongoose.Schema({
-    idCliente: { type: String, required: true },
-    cliente: { type: String, required: true },
-    numeroNota: { type: String, required: true },
-
-    valor: { type: Number, required: true },
-    dataEmissao: { type: Date, required: true },
-    entregadorId: { type: mongoose.Schema.Types.ObjectId, ref: "Usuario", required: true },
-    entregador: { type: String, required: true },
-    pago: { type: Boolean, required: true, default: false },
-    enviado: { type: Boolean, required: true, default: false },
-
-    deletado: { type: Boolean, required: true, default: false },
-    deletadoEm: { type: Date, required: false },
-
-    img: { type: String, required: false },
-    imgPublicId: { type: String, required: false },
-
-}, { timestamps: true });
-
-const NotasFiscais = mongoose.model("notas", NotasFiscaisSchema, "notas_fiscais");
-
-//modelo grupo notas
-const GrupoNotasSchema = new mongoose.Schema({
-    observacao: { type: String, required: false },
-    idCliente: { type: String, required: true },
-    notasId: [{ type: mongoose.Schema.Types.ObjectId, ref: 'NotasFiscais' }],
-
-    dataCriacao: { type: Date, default: Date.now },
-
-    dataExclusao: { type: Date, required: false },
-    dataAtualizacao: { type: Date, default: Date.now },
-
-}, { timestamps: true });
-
-const GrupoNotas = mongoose.model("GrupoNotas", GrupoNotasSchema, "grupos_notas");
-
-//modelo usuarios
-const UsuarioSchema = new mongoose.Schema({
-    nome: { type: String, required: true, unique: true },
-    telefone: { type: String, required: true, unique: true },
-    senha: { type: String, required: true },
-    cargo: { type: String, enum: ["entregador", "financeiro", "admin"], default: "entregador" },
-}, { timestamps: true });
-
-const Usuario = mongoose.model("Usuario", UsuarioSchema, "usuarios");
-
-// Escapa caracteres especiais de regex antes de usar um texto vindo do
-// usuário dentro de uma expressão regular (evita regex injection).
-function escaparRegex(texto) {
-    return texto.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-}
-
-// Monta um filtro de busca por nome de usuário que ignora maiúsculas/
-// minúsculas, mas preserva o nome exatamente como foi digitado no cadastro
-// (para exibição). Usado no cadastro, login e redefinição de senha.
-function filtroNomeSemCase(nome) {
-    return { nome: { $regex: `^${escaparRegex(nome.trim())}$`, $options: "i" } };
-}
-
-function normalizarNotaComEntregador(nota) {
-    const documento = nota && typeof nota.toObject === "function" ? nota.toObject() : { ...nota };
-    const nomeDoEntregador = documento.entregadorId && typeof documento.entregadorId === "object"
-        ? documento.entregadorId.nome
-        : documento.entregador;
-
-    return {
-        ...documento,
-        entregador: nomeDoEntregador || documento.entregador || ""
-    };
-}
-
-// ==================== AUTENTICAÇÃO ====================
-
-//cadastro
-app.post("/api/auth/cadastro", async (req, res) => {
+function limparRascunho() {
     try {
-        const { nome, telefone, password } = req.body;
-        const nomeLimpo = typeof nome === "string" ? nome.trim() : nome;
-
-        if (!nomeLimpo || !telefone || !password) {
-            return res.status(400).json({ erro: "Por favor, preencha todos os campos." });
-        }
-
-        // Validação do telefone (aceita com ou sem parênteses/traço/espaço)
-        const telefoneRegex = /^\s*\(?(\d{2})?\)?[-. ]?(\d{4,5})[-. ]?(\d{4})\s*$/;
-
-        if (!telefoneRegex.test(telefone)) {
-            return res.status(400).json({ erro: "Telefone inválido." });
-        }
-
-        // Remove tudo que não for número antes de salvar
-        const telefoneLimpo = telefone.replace(/\D/g, "");
-
-        const usuarioExiste = await Usuario.findOne({
-            $or: [
-                filtroNomeSemCase(nomeLimpo),
-                { telefone: telefoneLimpo }
-            ]
-        });
-
-        if (usuarioExiste) {
-            if (usuarioExiste.nome.toLowerCase() === nomeLimpo.toLowerCase()) {
-                return res.status(400).json({
-                    erro: "Este nome de usuário já está sendo usado."
-                });
-            }
-
-            return res.status(400).json({
-                erro: "Este telefone já está cadastrado."
-            });
-        }
-
-        const salt = await bcrypt.genSalt(10);
-        const senhaCriptografada = await bcrypt.hash(password, salt);
-
-        const novoUsuario = new Usuario({
-            nome: nomeLimpo,
-            telefone: telefoneLimpo,
-            senha: senhaCriptografada
-        });
-
-        await novoUsuario.save();
-
-        const token = jwt.sign(
-            {
-                id: novoUsuario._id,
-                nome: novoUsuario.nome,
-                cargo: novoUsuario.cargo
-            },
-            process.env.JWT_SECRET,
-            { expiresIn: "30d" }
-        );
-
-        // CORREÇÃO: usa a mesma config de cookie do login (antes estava com
-        // sameSite:"lax" e sem partitioned, o que quebra no cenário cross-site)
-        res.cookie("authToken", token, COOKIE_OPTIONS);
-
-        return res.status(201).json({
-            mensagem: "Usuário cadastrado com sucesso!",
-            nome: novoUsuario.nome,
-            usuario: {
-                id: novoUsuario._id,
-                nome: novoUsuario.nome
-            }
-        });
-
+        sessionStorage.removeItem(CHAVE_RASCUNHO);
     } catch (erro) {
-        console.error("❌ Erro no cadastro:", erro);
-        return res.status(500).json({
-            erro: "Erro ao tentar cadastrar usuário."
-        });
+        console.error("Erro ao limpar rascunho do formulário:", erro);
     }
-});
+}
 
-//LOGIN
-app.post("/api/auth/login", async (req, res) => {
+// Chamado depois que a lista de clientes já carregou, pra conseguir
+// religar o clienteSelecionado (não só o texto) quando houver rascunho.
+function restaurarRascunho() {
+    let rascunho;
     try {
-        const { login, password } = req.body;
-
-        if (!login || !password) {
-            return res.status(400).json({ erro: "Preencha usuário/telefone e senha." });
-        }
-
-        const telefone = login.replace(/\D/g, "");
-
-        const usuarioEncontrado = await Usuario.findOne({
-            $or: [
-                filtroNomeSemCase(login),
-                { telefone }
-            ]
-        });
-
-        if (!usuarioEncontrado) return res.status(400).json({ erro: "Usuário ou senha incorretos." });
-
-        // Aceita tanto a senha cadastrada quanto o telefone do usuário como
-        // credencial de acesso — permite entrar digitando o telefone no
-        // lugar da senha.
-        const senhaBateComHash = await bcrypt.compare(password, usuarioEncontrado.senha);
-
-        const telefoneDigitado = password.replace(/\D/g, "");
-        const senhaBateComTelefone = telefoneDigitado.length > 0 && telefoneDigitado === usuarioEncontrado.telefone;
-
-        if (!senhaBateComHash && !senhaBateComTelefone) {
-            return res.status(400).json({ erro: "Usuário ou senha incorretos." });
-        }
-
-        const token = jwt.sign(
-            { id: usuarioEncontrado._id, nome: usuarioEncontrado.nome, cargo: usuarioEncontrado.cargo },
-            process.env.JWT_SECRET,
-            { expiresIn: "7d" }
-        );
-
-        res.cookie("authToken", token, COOKIE_OPTIONS);
-
-        return res.status(200).json({
-            mensagem: "Login realizado com sucesso!",
-            login: usuarioEncontrado.nome,
-            cargo: usuarioEncontrado.cargo,
-        });
-
+        rascunho = JSON.parse(sessionStorage.getItem(CHAVE_RASCUNHO));
     } catch (erro) {
-        console.error("❌ Erro no login:", erro);
-        return res.status(500).json({ erro: "Erro ao tentar fazer login." });
+        console.error("Rascunho corrompido, ignorando:", erro);
+        return;
     }
-});
 
-// Logout
-app.post("/api/auth/logout", (req, res) => {
-    res.cookie("authToken", "", {
-        httpOnly: true,
-        secure: true,
-        sameSite: "none",
-        partitioned: true,
-        expires: new Date(0)
-    });
-    return res.status(200).json({ mensagem: "Deslogado com sucesso!" });
-});
+    if (!rascunho || (!rascunho.textoCliente && !rascunho.valor)) return;
 
-// Validação de Sessão (/me)
-app.get("/api/auth/me", verificarLogin, async (req, res) => {
-    try {
-        const userDb = await Usuario.findById(req.usuario.id);
-        if (!userDb) return res.status(401).json({ logado: false });
-
-        return res.json({
-            logado: true,
-            login: req.usuario.nome,
-            cargo: req.usuario.cargo || "entregador",
-            id: req.usuario.id,
-        });
-    } catch (err) {
-        return res.status(401).json({ logado: false });
+    if (rascunho.textoCliente) {
+        inputCliente.value = rascunho.textoCliente;
     }
-});
 
-// Redefinição de senha — acessada apenas pela página oculta de recuperação
-// (não é linkada em nenhum lugar do sistema). Recebe usuário + nova senha,
-// gera o hash com bcrypt e substitui a senha antiga no banco.
-app.post("/api/auth/redefinir-senha", async (req, res) => {
+    if (rascunho.valor) {
+        inputValor.value = rascunho.valor;
+    }
+
+    if (rascunho.pago === "true" && inputNotaJaPaga && btnNotaJaPaga) {
+        inputNotaJaPaga.value = "true";
+        btnNotaJaPaga.setAttribute("aria-pressed", "true");
+        btnNotaJaPaga.classList.add("ativo");
+        btnNotaJaPaga.textContent = "✅ Nota será registrada como paga";
+    }
+
+    if (rascunho.idClienteSelecionado) {
+        const cliente = todosClientes.find(c => c._id === rascunho.idClienteSelecionado);
+        if (cliente) {
+            selecionarCliente(cliente);
+        }
+    }
+
+    mostrarFeedback("Continuando o preenchimento de onde parou.", "info");
+}
+
+// =========================
+// Sessão / controle de acesso
+// =========================
+async function verificarSessaoEntregador() {
     try {
-        const { nome, novaSenha } = req.body;
-
-        if (!nome || !novaSenha) {
-            return res.status(400).json({ erro: "Preencha o usuário e a nova senha." });
-        }
-
-        if (novaSenha.length < 6) {
-            return res.status(400).json({ erro: "A nova senha precisa ter pelo menos 6 caracteres." });
-        }
-
-        const usuarioEncontrado = await Usuario.findOne(filtroNomeSemCase(nome));
-
-        if (!usuarioEncontrado) {
-            return res.status(400).json({ erro: "Usuário não encontrado." });
-        }
-
-        const salt = await bcrypt.genSalt(10);
-        const senhaCriptografada = await bcrypt.hash(novaSenha, salt);
-
-        usuarioEncontrado.senha = senhaCriptografada;
-        await usuarioEncontrado.save();
-
-        return res.status(200).json({
-            mensagem: "Senha redefinida com sucesso!"
+        const resposta = await fetch(`${API_URL}/auth/me`, {
+            method: "GET",
+            credentials: "include",
         });
 
-    } catch (erro) {
-        console.error("❌ Erro ao redefinir senha:", erro);
-        return res.status(500).json({
-            erro: "Erro ao tentar redefinir a senha."
-        });
-    }
-});
-
-// ==================== USUÁRIOS / ENTREGADORES ====================
-
-app.get("/api/usuarios/entregadores", verificarLogin, verificarCargo("financeiro", "admin"), async (req, res) => {
-    try {
-        const entregadores = await Usuario.find(
-            { cargo: "entregador" },
-            { _id: 1, nome: 1 }
-        ).sort({ nome: 1 });
-
-        res.json(entregadores);
-    } catch (erro) {
-        console.error("Erro ao buscar entregadores:", erro);
-        res.status(500).json({
-            erro: "Erro ao buscar entregadores."
-        });
-    }
-});
-
-// ==================== CLIENTES ====================
-
-//criar cliente
-app.post('/api/clientes', verificarLogin, async (req, res) => {
-    try {
-        const { cliente, email, cnpj, telefone, endereco, complemento, bairro } = req.body;
-
-        const clienteExistente = await Cliente.findOne({ cliente });
-        if (clienteExistente) {
-            return res.status(400).json({ error: "Cliente com este nome já cadastrado." });
+        if (!resposta.ok) {
+            window.location.href = "../login/login.html";
+            return false;
         }
 
-        const novoCliente = new Cliente({ cliente, email, cnpj, telefone, endereco, complemento, bairro });
+        const dados = await resposta.json();
 
-        await novoCliente.save();
-
-        res.status(201).json(novoCliente);
-
-    } catch (error) {
-        console.error(error);
-        res.status(500).json({ error: error.message });
-    }
-});
-
-// Importação em lote de clientes via CSV (usado pelo botão "Importar clientes
-// via CSV" no modal de cadastro). Processa um por um em vez de usar
-// insertMany, pra um cliente com problema não derrubar o lote inteiro — cada
-// linha entra ou é ignorada individualmente, e a resposta lista os dois casos.
-app.post('/api/clientes/importar-lote', verificarLogin, async (req, res) => {
-    try {
-        const { clientes } = req.body;
-
-        if (!Array.isArray(clientes) || clientes.length === 0) {
-            return res.status(400).json({ erro: "Nenhum cliente enviado para importação." });
+        if (dados.cargo === "admin" || dados.cargo === "financeiro") {
+            window.location.href = "../../";
+            return false;
         }
 
-        const resultado = {
-            importados: 0,
-            ignorados: [] // { cliente, motivo }
+        // armazenar dados do entregador para enviar com a nota
+        entregadorAtual = {
+            id: dados._id || dados.id || null,
+            nome: dados.nome || dados.name || dados.usuario || ""
         };
 
-        for (const dadosCliente of clientes) {
-            const { cliente, email, cnpj, telefone, endereco, complemento, bairro } = dadosCliente || {};
-
-            if (!cliente || !endereco || !bairro) {
-                resultado.ignorados.push({
-                    cliente: cliente || "(sem nome)",
-                    motivo: "Faltam campos obrigatórios (nome, endereço ou bairro)."
-                });
-                continue;
-            }
-
-            try {
-                const clienteExistente = await Cliente.findOne({ cliente });
-                if (clienteExistente) {
-                    resultado.ignorados.push({ cliente, motivo: "Já existe um cliente com este nome." });
-                    continue;
-                }
-
-                const novoCliente = new Cliente({
-                    cliente,
-                    // string vazia "" não é ignorada pelo índice único+sparse do
-                    // email (só null/undefined são) — undefined evita erro de
-                    // duplicata quando vários clientes do CSV não têm e-mail
-                    email: email || undefined,
-                    cnpj,
-                    telefone,
-                    endereco,
-                    complemento,
-                    bairro
-                });
-
-                await novoCliente.save();
-                resultado.importados++;
-
-            } catch (erroIndividual) {
-                console.error(`Erro ao importar cliente "${cliente}":`, erroIndividual.message);
-                resultado.ignorados.push({ cliente, motivo: "Erro ao salvar: " + erroIndividual.message });
-            }
-        }
-
-        res.status(201).json(resultado);
-
+        return true;
     } catch (erro) {
-        console.error("Erro na importação em lote:", erro);
-        res.status(500).json({ erro: "Erro ao importar clientes." });
+        console.error("Erro ao verificar sessão:", erro);
+        window.location.href = "../login/login.html";
+        return false;
     }
-});
-
-//carregar cliente
-app.get('/api/clientes', verificarLogin, async (req, res) => {
-    try {
-        const clientes = await Cliente.find();
-        res.json(clientes);
-    } catch (error) {
-        res.status(500).json({ error: "Erro ao buscar clientes." });
-    }
-});
-
-// ==================== NOTAS FISCAIS ====================
-
-//criar nota fiscal
-app.post('/api/notas', verificarLogin, upload.single('img'), async (req, res) => {
-    try {
-        const body = req.body || {};
-        const usuarioAutenticado = req.usuario;
-        const podeAtribuirEntregador = ["admin", "financeiro"].includes(usuarioAutenticado.cargo);
-
-        let entregadorSelecionado = null;
-        let entregadorIdParaSalvar = null;
-
-        const rawEntregadorId = body.entregadorId || (() => {
-            if (typeof body.entregador_obj !== "string") return null;
-
-            try {
-                const entregadorObj = JSON.parse(body.entregador_obj);
-                return entregadorObj && entregadorObj._id ? entregadorObj._id : null;
-            } catch (erro) {
-                return null;
-            }
-        })();
-
-        if (rawEntregadorId) {
-            const idInformado = String(rawEntregadorId);
-            const ehOProprioUsuario = idInformado === String(usuarioAutenticado.id);
-
-            // Só bloqueia quando o usuário está tentando atribuir a nota a OUTRO
-            // entregador. Um entregador enviando o próprio id (como faz o
-            // entrega.html) é sempre permitido.
-            if (!podeAtribuirEntregador && !ehOProprioUsuario) {
-                return res.status(403).json({ erro: "Você não tem permissão para atribuir um entregador diferente." });
-            }
-
-            if (!mongoose.Types.ObjectId.isValid(idInformado)) {
-                return res.status(400).json({ erro: "Identificador do entregador inválido." });
-            }
-
-            entregadorSelecionado = await Usuario.findById(idInformado).select("_id nome cargo");
-            if (!entregadorSelecionado) {
-                return res.status(400).json({ erro: "Entregador não encontrado." });
-            }
-
-            if (entregadorSelecionado.cargo !== "entregador") {
-                return res.status(400).json({ erro: "O usuário informado não é um entregador válido." });
-            }
-
-            entregadorIdParaSalvar = entregadorSelecionado._id;
-        } else {
-            entregadorSelecionado = await Usuario.findById(usuarioAutenticado.id).select("_id nome cargo");
-            if (!entregadorSelecionado) {
-                return res.status(401).json({ erro: "Usuário do entregador não encontrado." });
-            }
-
-            entregadorIdParaSalvar = entregadorSelecionado._id;
-        }
-
-        let publicId = "";
-        let linkDaFotoNuvem = "";
-
-        if (req.file) {
-            console.log("Subindo foto da nota para o Cloudinary...");
-
-            const resultado = await uploadParaCloudinary(req.file.buffer);
-
-            linkDaFotoNuvem = resultado.secure_url;
-            publicId = resultado.public_id;
-
-            console.log("Foto da nota enviada para o Cloudinary com sucesso.", linkDaFotoNuvem);
-        }
-
-        const nomeDoEntregador = entregadorSelecionado.nome;
-
-        const novaNota = new NotasFiscais({
-            idCliente: body.idCliente,
-            cliente: body.cliente,
-            numeroNota: body.numeroNota,
-            valor: body.valor,
-            dataEmissao: body.dataEmissao,
-            entregadorId: entregadorIdParaSalvar,
-            entregador: nomeDoEntregador,
-            pago: body.pago ?? false,
-            enviado: body.enviado ?? false,
-            img: linkDaFotoNuvem || body.img || "",
-            imgPublicId: publicId || body.imgPublicId || ""
-        });
-
-        await novaNota.save();
-        res.status(201).json(novaNota);
-    } catch (erro) {
-        console.error("Erro ao criar nota fiscal:", erro);
-        res.status(500).json({ error: "Erro ao criar nota fiscal." });
-    }
-});
-
-// listar notas da lixeira (excluídas, mas ainda no banco)
-// IMPORTANTE: precisa vir ANTES de qualquer rota GET "/api/notas/:id" que
-// venha a existir no futuro, senão "lixeira" seria interpretado como um :id
-app.get('/api/notas/lixeira', verificarLogin, async (req, res) => {
-    try {
-        const notas = await NotasFiscais.find({ deletado: true }).populate("entregadorId", "nome");
-        res.json(notas.map(normalizarNotaComEntregador));
-    } catch (erro) {
-        console.error(erro);
-        res.status(500).json({ error: "Erro ao buscar notas da lixeira." });
-    }
-});
-
-// conta quantas notas ativas um cliente já tem (usado só pra numerar a próxima nota).
-// Liberado pra qualquer usuário logado (inclusive entregador), diferente do
-// GET /api/notas completo, que expõe valores e status de pagamento de todos os clientes.
-app.get('/api/notas/contagem/:idCliente', verificarLogin, async (req, res) => {
-    try {
-        const quantidade = await NotasFiscais.countDocuments({
-            idCliente: req.params.idCliente,
-            deletado: false
-        });
-        res.json({ quantidade });
-    } catch (erro) {
-        console.error(erro);
-        res.status(500).json({ error: "Erro ao contar notas do cliente." });
-    }
-});
-
-// carregar notas ativas
-app.get('/api/notas', verificarLogin, verificarCargo("financeiro", "admin"), async (req, res) => {
-    try {
-        const notas = await NotasFiscais.find({ deletado: false }).populate("entregadorId", "nome");
-        res.json(notas.map(normalizarNotaComEntregador));
-    } catch (error) {
-        console.error(error);
-        res.status(500).json({ error: "Erro ao buscar notas." });
-    }
-});
-
-//deletar notas (soft delete: vai pra lixeira)
-app.delete('/api/notas/:id', verificarLogin, verificarCargo("financeiro", "admin"), async (req, res) => {
-    try {
-        const nota = await NotasFiscais.findById(req.params.id);
-
-        if (!nota) {
-            return res.status(404).json({ error: "Nota fiscal não encontrada." });
-        }
-
-        nota.deletado = true;
-        nota.deletadoEm = new Date();
-
-        await nota.save();
-
-        res.status(200).json({ message: "Nota fiscal deletada com sucesso.", nota });
-    } catch (error) {
-        console.error(error);
-        res.status(500).json({ error: "Erro ao deletar nota fiscal." });
-    }
-});
-
-// excluir definitivamente (remove do banco) a partir da Lixeira
-app.delete('/api/notas/:id/permanente', verificarLogin, verificarCargo("admin"), async (req, res) => {
-    try {
-        const nota = await NotasFiscais.findByIdAndDelete(req.params.id);
-
-        if (!nota) {
-            return res.status(404).json({ error: "Nota não encontrada." });
-        }
-
-        if (nota.imgPublicId) {
-            await cloudinary.uploader.destroy(nota.imgPublicId);
-        }
-
-        // remove a referência dessa nota de qualquer grupo que a contenha,
-        // evitando ids "fantasma" sobrando no notasId dos grupos
-        await GrupoNotas.updateMany(
-            { notasId: req.params.id },
-            { $pull: { notasId: req.params.id } }
-        );
-
-        res.json({ ok: true });
-    } catch (erro) {
-        console.error(erro);
-        res.status(500).json({ error: "Erro ao excluir nota permanentemente." });
-    }
-});
-
-//restaurar nota (tira da lixeira)
-app.put('/api/notas/:id/restaurar', verificarLogin, verificarCargo("admin", "financeiro"), async (req, res) => {
-    try {
-        const nota = await NotasFiscais.findByIdAndUpdate(
-            req.params.id,
-            {
-                deletado: false,
-                deletadoEm: null
-            },
-            { new: true }
-        );
-
-        if (!nota) {
-            return res.status(404).json({ error: "Nota não encontrada." });
-        }
-
-        res.json(nota);
-    } catch (erro) {
-        console.error(erro);
-        res.status(500).json({ error: "Erro ao restaurar nota." });
-    }
-});
-
-//atualizar status pagamento nota
-app.put("/api/notas/:id/pago", verificarLogin, verificarCargo("admin", "financeiro"), async (req, res) => {
-    try {
-        const nota = await NotasFiscais.findById(req.params.id);
-
-        if (!nota) {
-            return res.status(404).json({ erro: "Nota não encontrada." });
-        }
-
-        nota.pago = !nota.pago;
-        await nota.save();
-
-        res.json(nota);
-    } catch (erro) {
-        console.error(erro);
-        res.status(500).json({ erro: "Erro ao atualizar nota." });
-    }
-});
-
-// ==================== GRUPOS DE NOTAS ====================
-
-//criar grupo de notas
-app.post("/api/grupos", verificarLogin, verificarCargo("admin", "financeiro"), async (req, res) => {
-    try {
-        const { observacao, idCliente, notasId } = req.body;
-
-        const novoGrupo = new GrupoNotas({
-            observacao,
-            idCliente,
-            notasId,
-        });
-        await novoGrupo.save();
-        res.status(201).json(novoGrupo);
-    } catch (error) {
-        console.error(error);
-        res.status(500).json({ error: "Erro ao criar grupo de notas." });
-    }
-});
-
-// carregar grupos de notas, menos os excluídos
-app.get("/api/grupos", verificarLogin, verificarCargo("admin", "financeiro"), async (req, res) => {
-    try {
-        const { idCliente } = req.query;
-        const filtro = { dataExclusao: null };
-        if (idCliente) filtro.idCliente = idCliente;
-
-        const grupos = await GrupoNotas.find(filtro);
-        res.json(grupos);
-    } catch (erro) {
-        console.error(erro);
-        res.status(500).json({ error: "Erro ao buscar grupos." });
-    }
-});
-
-// Editar grupo (observação/notas)
-app.put("/api/grupos/:id", verificarLogin, verificarCargo("admin", "financeiro"), async (req, res) => {
-    try {
-        const grupoAtualizado = await GrupoNotas.findByIdAndUpdate(
-            req.params.id,
-            req.body,
-            { new: true }
-        );
-
-        if (!grupoAtualizado) {
-            return res.status(404).json({ error: "Grupo não encontrado." });
-        }
-
-        res.json(grupoAtualizado);
-    } catch (erro) {
-        console.error(erro);
-        res.status(500).json({ error: "Erro ao atualizar grupo." });
-    }
-});
-
-// excluir grupo - marca grupo e notas como excluídas
-app.delete("/api/grupos/:id", verificarLogin, verificarCargo("admin", "financeiro"), async (req, res) => {
-    try {
-        const grupo = await GrupoNotas.findById(req.params.id);
-
-        if (!grupo) {
-            return res.status(404).json({ error: "Grupo não encontrado." });
-        }
-
-        const agora = new Date();
-
-        //marca o grupo como excluído (campo do schema de GrupoNotas)
-        grupo.dataExclusao = agora;
-        await grupo.save();
-
-        //marca todas as notas do grupo como excluídas também
-        await NotasFiscais.updateMany(
-            { _id: { $in: grupo.notasId } },
-            { $set: { deletado: true, deletadoEm: agora } }
-        );
-
-        res.json({ ok: true, grupo });
-    } catch (erro) {
-        console.error(erro);
-        res.status(500).json({ error: "Erro ao excluir grupo." });
-    }
-});
-
-//CRIAÇÃO DA TABELA E MANIPULAÇÃO DA MESMA
-const RotaPlanejadaSchema = new mongoose.Schema({
-    data: { type: String, required: true },
-
-    entregadorId: {
-        type: mongoose.Schema.Types.ObjectId,
-        ref: "Usuario",
-        required: false
-    },
-
-    entregador: {
-        type: String,
-        required: true
-    },
-
-    clientes: [{
-        type: String,
-        required: true
-    }],
-
-}, { timestamps: true });
-
-RotaPlanejadaSchema.index(
-    { data: 1, entregador: 1 },
-    { unique: true }
-);
-
-const RotaPlanejada = mongoose.model("RotaPlanejada", RotaPlanejadaSchema, "rotas_planejadas");
-
-app.get('/api/rotas-planejadas', verificarLogin, async (req, res) => {
-    try {
-        const { data } = req.query;
-        const rotas = await RotaPlanejada.find(data ? { data } : {});
-        res.json(rotas);
-    } catch (erro) {
-        console.error(erro);
-        res.status(500).json({ erro: "Erro ao buscar rotas planejadas." });
-    }
-});
-
-app.post('/api/rotas-planejadas', verificarLogin, verificarCargo("admin"), async (req, res) => {
-    try {
-        const { data, rotas } = req.body;
-        if (!data || !Array.isArray(rotas)) {
-            return res.status(400).json({ erro: "Dados inválidos." });
-        }
-
-        await RotaPlanejada.deleteMany({ data }); // substitui o planejamento do dia inteiro
-
-        const documentos = rotas
-            .filter(r => r.entregador && Array.isArray(r.clientes) && r.clientes.length > 0)
-            .map(r => ({
-    data,
-    entregadorId: r.entregadorId || null,
-    entregador: r.entregador,
-    clientes: r.clientes
-}));
-
-        if (documentos.length > 0) await RotaPlanejada.insertMany(documentos);
-
-        res.status(201).json({ mensagem: "Rotas planejadas salvas.", quantidade: documentos.length });
-    } catch (erro) {
-        console.error(erro);
-        res.status(500).json({ erro: "Erro ao salvar rotas planejadas." });
-    }
-});
-
-// ==================== UTIL ====================
-
-// Extrai o public_id do Cloudinary a partir da URL da imagem.
-// Função pura, sem lógica de autenticação (a auth já é feita nas rotas que a chamam).
-function obterPublicIdDaUrl(url) {
-    if (!url) return null;
-    const partes = url.split('/');
-    const arquivoComExtensao = partes.pop();
-    const pasta = partes.pop();
-    const arquivoSemExtensao = arquivoComExtensao.split('.')[0];
-    return `${pasta}/${arquivoSemExtensao}`;
 }
 
-//iniciar servidor
-const PORTA = process.env.PORT || 3000;
-app.listen(PORTA, () => {
-    console.log(`🚀 Servidor rodando na porta ${PORTA}`);
+// =========================
+// Carregar clientes
+// =========================
+async function carregarClientes() {
+    try {
+        const resposta = await fetch(`${API_URL}/clientes`, {
+            credentials: "include"
+        });
+
+        if (!resposta.ok) {
+            throw new Error("Erro ao carregar clientes.");
+        }
+
+        todosClientes = await resposta.json();
+
+    } catch (erro) {
+        console.error(erro);
+        mostrarFeedback("Erro ao carregar clientes.", "erro");
+    }
+}
+
+// =========================
+// Autocomplete de cliente
+// =========================
+inputCliente.addEventListener("input", () => {
+    clienteSelecionado = null;
+
+    const texto = inputCliente.value.trim();
+    salvarRascunho();
+
+    if (!texto) {
+        listaClientes.innerHTML = "";
+        return;
+    }
+
+    mostrarSugestoes(texto);
 });
+
+inputValor.addEventListener("input", salvarRascunho);
+
+function mostrarSugestoes(texto) {
+    listaClientes.innerHTML = "";
+
+    const encontrados = todosClientes.filter(cliente =>
+        cliente.cliente.toLowerCase().includes(texto.toLowerCase())
+    );
+
+    encontrados.forEach(cliente => {
+        const item = document.createElement("div");
+        item.className = "autocomplete-item";
+        item.textContent = cliente.cliente;
+
+        item.addEventListener("click", () => {
+            inputCliente.value = cliente.cliente;
+            listaClientes.innerHTML = "";
+            selecionarCliente(cliente);
+        });
+
+        listaClientes.appendChild(item);
+    });
+}
+
+document.addEventListener("click", (e) => {
+    if (!e.target.closest(".autocomplete")) {
+        listaClientes.innerHTML = "";
+    }
+});
+
+async function selecionarCliente(cliente) {
+    clienteSelecionado = cliente;
+    salvarRascunho();
+    await buscarNumeroNota(cliente);
+}
+
+// =========================
+// Buscar próximo número da nota
+// =========================
+async function buscarNumeroNota(cliente) {
+    try {
+        const resposta = await fetch(`${API_URL}/notas?_=${Date.now()}`, {
+            credentials: "include"
+        });
+
+        if (!resposta.ok) {
+            throw new Error("Erro ao buscar notas.");
+        }
+
+        const notas = await resposta.json();
+
+        const chaveAlvo = cliente.cliente.toLowerCase().trim();
+        const notasCliente = notas.filter(n =>
+            (n.cliente || "").toLowerCase().trim() === chaveAlvo
+        );
+
+        numeroNota = notasCliente.length + 1;
+
+    } catch (erro) {
+        console.error(erro);
+        numeroNota = 1;
+    }
+}
+
+// =========================
+// Imagem <-> base64
+// (base64 é o que permite a nota sobreviver a um recarregamento de página
+// dentro do localStorage — um File/Blob "cru" não sobrevive ao JSON.stringify)
+// =========================
+function arquivoParaBase64(arquivo) {
+    return new Promise((resolve, reject) => {
+        const leitor = new FileReader();
+        leitor.onload = () => resolve(leitor.result);
+        leitor.onerror = () => reject(new Error("Não foi possível ler a imagem selecionada."));
+        leitor.readAsDataURL(arquivo);
+    });
+}
+
+function base64ParaBlob(dataUrl) {
+    const [cabecalho, conteudo] = dataUrl.split(",");
+    const tipo = (cabecalho.match(/data:(.*?);base64/) || [])[1] || "image/jpeg";
+    const binario = atob(conteudo);
+    const bytes = new Uint8Array(binario.length);
+    for (let i = 0; i < binario.length; i++) {
+        bytes[i] = binario.charCodeAt(i);
+    }
+    return new Blob([bytes], { type: tipo });
+}
+
+// =========================
+// Fila local (localStorage) — sobrevive a recarregar a página
+// =========================
+function obterFila() {
+    try {
+        return JSON.parse(localStorage.getItem(CHAVE_FILA)) || [];
+    } catch (erro) {
+        console.error("Fila local corrompida, reiniciando:", erro);
+        return [];
+    }
+}
+
+function salvarFila(notas) {
+    try {
+        localStorage.setItem(CHAVE_FILA, JSON.stringify(notas));
+        return true;
+    } catch (erro) {
+        // Provavelmente estourou o limite de armazenamento do navegador
+        // (fotos em base64 ocupam espaço). A nota ainda assim será tentada
+        // agora mesmo, só não fica garantida a sobrevivência a um reload.
+        console.error("Erro ao salvar fila local (armazenamento cheio?):", erro);
+        return false;
+    }
+}
+
+function salvarNotaLocal(nota) {
+    const notas = obterFila();
+    notas.push(nota);
+    return salvarFila(notas);
+}
+
+function atualizarNotaFila(idLocal, alteracoes) {
+    const notas = obterFila().map(n => n.idLocal === idLocal ? { ...n, ...alteracoes } : n);
+    salvarFila(notas);
+}
+
+function removerNotaFila(idLocal) {
+    const notas = obterFila().filter(n => n.idLocal !== idLocal);
+    salvarFila(notas);
+}
+
+function proximoAtraso(tentativas) {
+    const indice = Math.min(tentativas, ATRASOS_RETRY_MS.length - 1);
+    return ATRASOS_RETRY_MS[indice];
+}
+
+// =========================
+// Indicador visual da fila
+// =========================
+function atualizarIndicadorFila() {
+    if (!filaPendentesEl) return;
+
+    const notas = obterFila();
+
+    if (notas.length === 0) {
+        filaPendentesEl.textContent = "";
+        filaPendentesEl.className = "fila-pendentes";
+        return;
+    }
+
+    const enviandoAgora = notas.some(n => idsEmEnvio.has(n.idLocal));
+    const plural = notas.length > 1 ? "s" : "";
+    const notaComSessaoExpirada = notas.find(n => n.precisaLogin);
+
+    if (notaComSessaoExpirada) {
+        // Retentar não resolve sozinho quando o problema é a sessão — avisa
+        // de forma bem visível em vez de deixar tentando pra sempre calado.
+        filaPendentesEl.textContent = `⚠️ Sessão expirada — ${notas.length} nota${plural} não conseguiram ser enviadas. Saia e faça login de novo (as notas continuam guardadas e serão enviadas assim que você entrar de novo).`;
+        filaPendentesEl.className = "fila-pendentes fila-pendentes--urgente";
+        return;
+    }
+
+    if (enviandoAgora) {
+        filaPendentesEl.textContent = `Enviando nota pendente... (${notas.length} na fila)`;
+        filaPendentesEl.className = "fila-pendentes fila-pendentes--ativa";
+        return;
+    }
+
+    const notaComErro = notas.find(n => n.ultimoErro);
+    filaPendentesEl.textContent = notaComErro
+        ? `${notas.length} nota${plural} aguardando envio (última falha: ${notaComErro.ultimoErro}). Tentando de novo automaticamente.`
+        : `${notas.length} nota${plural} aguardando envio — tentando novamente automaticamente.`;
+    filaPendentesEl.className = "fila-pendentes fila-pendentes--ativa";
+}
+
+// =========================
+// Enviar nota ao servidor
+// =========================
+async function enviarNotaServidor(nota) {
+    const formData = new FormData();
+    formData.append("idCliente", nota.idCliente);
+    formData.append("cliente", nota.cliente);
+    formData.append("numeroNota", nota.numeroNota);
+    formData.append("valor", nota.valor);
+    formData.append("dataEmissao", nota.dataEmissao);
+    formData.append("pago", Boolean(nota.pago));
+    formData.append("enviado", false);
+    formData.append("entregadorId", nota.entregadorId || "");
+    formData.append("entregador", nota.entregador || "");
+    formData.append("img", base64ParaBlob(nota.imgBase64), nota.imgNome || "nota.jpg");
+
+    const resposta = await fetch(`${API_URL}/notas`, {
+        method: "POST",
+        body: formData,
+        credentials: "include"
+    });
+
+    const dados = await resposta.json().catch(() => ({}));
+
+    if (!resposta.ok) {
+        // O backend às vezes responde com a chave "erro" (a maioria das
+        // rotas) e às vezes com "error" — sem checar as duas, a mensagem
+        // real (ex: sessão expirada) era descartada e virava sempre um
+        // "Erro ao cadastrar nota." genérico, impossível de diagnosticar.
+        const mensagem = dados.erro || dados.error || "Erro ao cadastrar nota.";
+        const erro = new Error(mensagem);
+        erro.status = resposta.status;
+        erro.precisaLogin = resposta.status === 401;
+        throw erro;
+    }
+
+    return dados;
+}
+
+// Tenta enviar UMA nota da fila. Em caso de falha, agenda a próxima
+// tentativa (15s / 30s / 40s / 40s / 40s...) em vez de desistir — exceto
+// quando a falha é de sessão expirada (401): nesse caso, continuar
+// tentando não resolve nada sozinho, então avisamos bem visível em vez de
+// deixar o entregador achar que "está tudo enviando" silenciosamente.
+async function tentarEnviarNota(nota) {
+    if (idsEmEnvio.has(nota.idLocal)) return;
+
+    idsEmEnvio.add(nota.idLocal);
+    atualizarIndicadorFila();
+
+    try {
+        await enviarNotaServidor(nota);
+        removerNotaFila(nota.idLocal);
+        mostrarFeedback("Nota enviada com sucesso!", "sucesso");
+    } catch (erro) {
+        console.error("Falha ao enviar nota da fila:", erro);
+        const tentativas = (nota.tentativas || 0) + 1;
+        const atraso = proximoAtraso(tentativas);
+        atualizarNotaFila(nota.idLocal, {
+            status: "erro",
+            tentativas,
+            proximaTentativa: Date.now() + atraso,
+            ultimoErro: erro.message || "Erro desconhecido.",
+            precisaLogin: Boolean(erro.precisaLogin)
+        });
+    } finally {
+        idsEmEnvio.delete(nota.idLocal);
+        atualizarIndicadorFila();
+    }
+}
+
+// Percorre a fila e envia (em sequência) todas as notas cuja hora de tentar
+// de novo já chegou. Chamado pelo ticker periódico, ao recarregar a página,
+// e quando a conexão volta.
+async function processarFila() {
+    const agora = Date.now();
+    const notas = obterFila().filter(n =>
+        !idsEmEnvio.has(n.idLocal) &&
+        (n.proximaTentativa || 0) <= agora
+    );
+
+    for (const nota of notas) {
+        await tentarEnviarNota(nota);
+    }
+}
+
+setInterval(processarFila, INTERVALO_TICKER_MS);
+window.addEventListener("online", processarFila);
+
+// =========================
+// Auto-atualização
+// Fica checando de tempos em tempos se foi publicada uma versão nova do
+// app. Se sim — e não tiver nenhum envio em andamento nesse instante, pra
+// não interromper um upload — recarrega a página sozinha. O rascunho
+// (sessionStorage) e a fila de notas (localStorage) sobrevivem ao reload,
+// então isso é seguro mesmo no meio do preenchimento.
+// =========================
+async function verificarNovaVersao() {
+    try {
+        const resposta = await fetch(`${API_URL}/versao?_=${Date.now()}`, { cache: "no-store" });
+        if (!resposta.ok) return;
+
+        const dados = await resposta.json();
+        if (!dados.versao || dados.versao === VERSAO_APP) return;
+
+        if (idsEmEnvio.size > 0) return; // tenta de novo na próxima checagem
+
+        // Cache-bust na própria URL da página, pra garantir que o
+        // navegador busque o HTML (e não sirva uma cópia antiga do cache).
+        const url = new URL(window.location.href);
+        url.searchParams.set("_v", Date.now());
+        window.location.replace(url.toString());
+    } catch (erro) {
+        console.error("Erro ao checar versão do app:", erro);
+        // silencioso — só tenta de novo na próxima checagem
+    }
+}
+
+setInterval(verificarNovaVersao, INTERVALO_VERSAO_MS);
+
+// =========================
+// Marcar nota como já paga
+// =========================
+if (btnNotaJaPaga && inputNotaJaPaga) {
+    btnNotaJaPaga.addEventListener("click", () => {
+        const ativo = inputNotaJaPaga.value === "true";
+        inputNotaJaPaga.value = ativo ? "false" : "true";
+        btnNotaJaPaga.setAttribute("aria-pressed", String(!ativo));
+        btnNotaJaPaga.classList.toggle("ativo", !ativo);
+        btnNotaJaPaga.textContent = !ativo ? "✅ Nota será registrada como paga" : "💰 Registrar como já paga";
+        salvarRascunho();
+    });
+}
+
+// =========================
+// Submit do formulário
+// =========================
+formEntrega.addEventListener("submit", async (e) => {
+    e.preventDefault();
+
+    if (!clienteSelecionado) {
+        mostrarFeedback("Selecione um cliente válido.", "erro");
+        return;
+    }
+
+    if (!inputImagem.files.length) {
+        mostrarFeedback("Selecione uma imagem.", "erro");
+        return;
+    }
+
+    btnEnviar.disabled = true;
+    btnEnviar.textContent = "Adicionando à fila...";
+
+    let imgBase64;
+    try {
+        imgBase64 = await arquivoParaBase64(inputImagem.files[0]);
+    } catch (erro) {
+        console.error(erro);
+        mostrarFeedback("Não foi possível ler a imagem selecionada. Tente novamente.", "erro");
+        btnEnviar.disabled = false;
+        btnEnviar.textContent = "Enviar";
+        return;
+    }
+
+    const nota = {
+        idLocal: Date.now(),
+        idCliente: clienteSelecionado._id,
+        cliente: clienteSelecionado.cliente.trim(),
+        numeroNota,
+        valor: inputValor.value.trim(),
+        dataEmissao: obterDataLocalISO(new Date()),
+        imgBase64,
+        imgNome: inputImagem.files[0].name || "nota.jpg",
+        pago: inputNotaJaPaga?.value === "true",
+        entregadorId: entregadorAtual ? entregadorAtual.id : null,
+        entregador: entregadorAtual ? entregadorAtual.nome : "",
+        status: "pendente",
+        tentativas: 0,
+        proximaTentativa: Date.now()
+    };
+
+    const guardouLocal = salvarNotaLocal(nota);
+    atualizarIndicadorFila();
+
+    if (!guardouLocal) {
+        // Não deu pra guardar a nota de forma durável — provavelmente o
+        // armazenamento do navegador está cheio (fotos em base64 ocupam
+        // bastante espaço). Sem isso, NÃO dá pra confiar na fila: se
+        // limparmos o formulário aqui, a nota se perde de vez caso o envio
+        // direto também falhe. Então, nesse caso específico, voltamos ao
+        // comportamento seguro — tenta enviar na hora e só limpa os campos
+        // se der certo; se falhar, mantém tudo preenchido pro entregador
+        // tentar de novo sem precisar redigitar nada.
+        mostrarFeedback("Armazenamento do celular cheio. Tentando enviar agora — aguarde a confirmação antes de sair da tela.", "erro");
+        btnEnviar.disabled = false;
+        btnEnviar.textContent = "Enviar";
+
+        try {
+            await enviarNotaServidor(nota);
+            mostrarFeedback("Nota enviada com sucesso!", "sucesso");
+        } catch (erro) {
+            console.error("Falha ao enviar nota sem backup local:", erro);
+            mostrarFeedback("Não foi possível enviar e o armazenamento local está cheio. Libere espaço no celular (ou use uma foto menor) e toque em Enviar novamente.", "erro");
+            return; // mantém os campos preenchidos — nada foi perdido
+        }
+    } else {
+        mostrarFeedback("Nota adicionada à fila de envio.", "info");
+    }
+
+    // Chegou aqui só quando a nota está garantida: ou guardada na fila
+    // durável, ou já confirmada como enviada. Agora sim é seguro limpar o
+    // formulário sem risco de perder o que o entregador preencheu.
+    limparRascunho();
+    formEntrega.reset();
+    nomeArquivo.textContent = "Nenhum arquivo selecionado";
+    if (inputNotaJaPaga && btnNotaJaPaga) {
+        inputNotaJaPaga.value = "false";
+        btnNotaJaPaga.setAttribute("aria-pressed", "false");
+        btnNotaJaPaga.classList.remove("ativo");
+        btnNotaJaPaga.textContent = "💰 Registrar como já paga";
+    }
+    clienteSelecionado = null;
+    numeroNota = 1;
+
+    btnEnviar.disabled = false;
+    btnEnviar.textContent = "Enviar";
+
+    // Tenta enviar imediatamente; se falhar, o ticker da fila cuida do
+    // reenvio sozinho — não precisa esperar o resultado aqui.
+    processarFila();
+});
+
+// =========================
+// Inicialização
+// =========================
+(async function iniciar() {
+    const sessaoValida = await verificarSessaoEntregador();
+    if (!sessaoValida) return;
+
+    await carregarClientes();
+    restaurarRascunho();
+
+    // Retoma qualquer nota que ficou pendente de uma sessão anterior
+    // (ex: o entregador fechou o app ou perdeu sinal antes de terminar).
+    atualizarIndicadorFila();
+    processarFila();
+})();
