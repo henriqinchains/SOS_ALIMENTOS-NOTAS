@@ -5,7 +5,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>SOS Alimentos - NOTAS FISCAIS</title>
-    <link rel="stylesheet" href="style.css">
+    <link id="folhaEstilo" rel="stylesheet" href="style.css">
+    <script>document.getElementById("folhaEstilo").href = "style.css?v=" + Date.now();</script>
 </head>
 
 <body>
@@ -243,7 +244,7 @@
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
-    <script src="script.js"></script>
+    <script>document.write('<script src="script.js?v=' + Date.now() + '"><' + '/script>');</script>
     <script>
         // Evento de Logout
         document.getElementById("btnSair").addEventListener("click", async (event) => {
