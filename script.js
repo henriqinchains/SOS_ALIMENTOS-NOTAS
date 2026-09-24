@@ -2282,7 +2282,10 @@ document.addEventListener("DOMContentLoaded", async () => {
 
         try {
             const resposta = await fetchAutenticado(`${API_URL}/notas?_=${Date.now()}`, { credentials: "include" });
-            notasFaturamentoCache = await resposta.json();
+            if (!resposta.ok) throw new Error(`Falha ao buscar notas (HTTP ${resposta.status})`);
+            const dadosNotas = await resposta.json();
+            if (!Array.isArray(dadosNotas)) throw new Error("Resposta inesperada ao buscar notas");
+            notasFaturamentoCache = dadosNotas;
 
             if (faturamentoToolbar) montarToolbarFaturamento(faturamentoToolbar);
             montarResumoEListaFaturamento(faturamentoConteudo);
@@ -2458,6 +2461,25 @@ document.addEventListener("DOMContentLoaded", async () => {
             btnPlanejarRotas.addEventListener("click", () => abrirModalPlanejarRotas());
         }
 
+        // A seção (título + botões) entra na tela IMEDIATAMENTE. Antes ela só
+        // era anexada no fim da função, depois do await das rotas planejadas:
+        // se essa busca demorasse ou desse erro, nada aparecia — nem o botão
+        // "Planejar Rotas". Agora só o corpo (tabela) espera os dados.
+        const corpoSecao = document.createElement("div");
+        corpoSecao.classList.add("tabela-entregadores-corpo");
+        corpoSecao.innerHTML = "<p class='sem-notas-txt'>Carregando entregas...</p>";
+        secao.appendChild(corpoSecao);
+        container.appendChild(secao);
+
+        try {
+            await preencherTabelaEntregadores(corpoSecao, notasNoPeriodo);
+        } catch (erro) {
+            console.error("Erro ao montar a tabela de entregadores:", erro);
+            corpoSecao.innerHTML = "<p class='erro-txt'>Não foi possível montar a tabela de entregas. Toque em 🔄 Recarregar para tentar de novo.</p>";
+        }
+    }
+
+    async function preencherTabelaEntregadores(corpoSecao, notasNoPeriodo) {
         const formatarMoeda = (valor) => valor.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 
         // Agrupa por entregador de forma estável usando `entregadorId` quando disponível.
@@ -2627,8 +2649,8 @@ document.addEventListener("DOMContentLoaded", async () => {
             const aviso = document.createElement("p");
             aviso.classList.add("sem-notas-txt");
             aviso.textContent = "Nenhuma entrega registrada nesse período.";
-            secao.appendChild(aviso);
-            container.appendChild(secao);
+            corpoSecao.innerHTML = "";
+            corpoSecao.appendChild(aviso);
             return;
         }
 
@@ -2725,8 +2747,8 @@ porEntregador.forEach((obj, key) => {
         tabela.appendChild(tbody);
 
         wrapper.appendChild(tabela);
-        secao.appendChild(wrapper);
-        container.appendChild(secao);
+        corpoSecao.innerHTML = "";
+        corpoSecao.appendChild(wrapper);
     }
 
     // A rota de rotas planejadas ainda não existe no backend — combinado que
@@ -2735,7 +2757,10 @@ porEntregador.forEach((obj, key) => {
         try {
             const resposta = await fetchAutenticado(`${API_URL}/rotas-planejadas?data=${data}`, { credentials: "include" });
             if (!resposta.ok) return [];
-            return await resposta.json();
+            const dados = await resposta.json();
+            // Sem rota criada o backend pode responder null/objeto/{message}
+            // em vez de []; .forEach em não-array quebrava a tabela inteira.
+            return Array.isArray(dados) ? dados : [];
         } catch (erro) {
             console.error("Rotas planejadas indisponíveis:", erro);
             return [];
