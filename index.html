@@ -1,181 +1,267 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="pt-BR">
 
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SOS ALIMENTOS</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link
-        href="https://fonts.googleapis.com/css2?family=Poppins:wght@500;600;700;800&family=Inter:wght@400;500;600&display=swap"
-        rel="stylesheet">
-
-    <!-- Link adicionado para puxar os ícones do WhatsApp e Instagram -->
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
-
-    <link rel="stylesheet" href="style.css">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>SOS Alimentos - NOTAS FISCAIS</title>
+    <link id="folhaEstilo" rel="stylesheet" href="style.css">
+    <script>document.getElementById("folhaEstilo").href = "style.css?v=" + Date.now();</script>
 </head>
 
 <body>
-    <header>
-        <!-- Navegação Principal -->
-        <div class="nav-bar-secundaria">
+    <aside class="sidebar left">
+        <nav class="navbar">
+            <h1>SOS ALIMENTOS</h1>
 
-            <!-- Grupo: Logo + Ícones Sociais -->
-            <div class="logo-e-sociais">
-                <div class="logo">
-                    <h2>SOS ALIMENTOS</h2>
-                </div>
+            <ul class="nav-links">
+                <li><a href="#" data-page="clientes">Clientes</a></li>
+                <li><a href="#" data-page="notas">Notas</a></li>
+                <li><a href="#" data-page="faturamento">Faturamento</a></li>
+                <li><a href="#" data-page="lixeira">Lixeira</a></li>
+            </ul>
 
-                <div class="redes-sociais">
-                    <a href="https://wa.me/5513988824697?text=Ol%C3%A1%21%20Eu%20gostaria%20de%20fazer%20um%20pedido."
-                        target="_blank" class="icon-zap" title="Nosso WhatsApp">
-                        <i class="fab fa-whatsapp"></i>
-                    </a>
-                    <a href="https://instagram.com/sosalimentosoficial" target="_blank" class="icon-insta"
-                        title="Nosso Instagram">
-                        <i class="fab fa-instagram"></i>
-                    </a>
-                </div>
+            <div class="sidebar-actions">
+                <button id="btnAbrirModalCliente">+ Cliente</button>
+                <button id="btnNovaNota">+ Nota</button>
+                <button id="btnSair">Sair</button>
             </div>
+        </nav>
+    </aside>
 
-            <!-- Links de Navegação -->
-            <div class="nav-links">
-                <a href="#ofertas">Ofertas da semana</a>
-                <a href="#produtos">Produtos</a>
+    <main>
+
+        <div id="modal-container" class="modal-overlay" style="display: none">
+            <div class="modal-card">
+                <button id="btn-fechar-modal" class="close-button">&times;</button>
+                <h2 id="tituloModalCliente">Registrar Novo Cliente <span>SOS</span></h2>
+
+                <div id="importarCsvArea" class="importar-csv-area">
+                    <button type="button" id="btnImportarCsv" class="btn-importar-csv">📥 Importar clientes via
+                        CSV</button>
+                    <input type="file" id="inputImportarCsv" accept=".csv" hidden>
+                </div>
+
+                <!-- Feedback específico do cliente -->
+                <div id="feedbackCliente" class="feedback"></div>
+
+                <div id="previaImportacaoCsv" class="previa-importacao-csv" hidden></div>
+
+                <form id="formNovoCliente">
+                    <div class="grid">
+                        <label>Nome do cliente*<input type="text" name="cliente" id="cliente"
+                                placeholder="Digite o nome do novo cliente" autocomplete="off">
+                        </label>
+                    </div>
+                    <div class="grid">
+                        <label>E-mail<input type="email" name="email"
+                                placeholder="Insira o e-mail do cliente (opcional)" />
+                        </label>
+                    </div>
+                    <div class="grid">
+                        <label>CNPJ
+                            <div class="campo-com-botao">
+                                <input type="text" name="cnpj" id="cnpj" maxlength="18"
+                                    placeholder="Digite o CNPJ do cliente (opcional)" />
+                                <button type="button" id="btnBuscarCnpj" class="btn-icone"
+                                    title="Buscar dados pelo CNPJ">🔍</button>
+                            </div>
+                        </label>
+                    </div>
+                    <div class="grid">
+                        <label>Telefone<input type="text" name="telefone" id="telefone"
+                                placeholder="Preenchido automaticamente pelo CNPJ (opcional)" />
+                        </label>
+                    </div>
+                    <div class="grid grid-three-fourths">
+                        <label><span>Endereço*<input id="endereco" name="endereco" type="text"
+                                    placeholder="Insira o endereço do cliente (obrigatório)" required></span></label>
+                        <label>Complemento<input id="complemento" name="complemento" type="text"></label>
+                    </div>
+                    <div class="grid">
+                        <label><span>Bairro* <input id="bairro" name="bairro" type="text"
+                                    placeholder="Insira o bairro do cliente (obrigatório)"></span></label>
+                    </div>
+
+                    <div class="acoes-form-cliente">
+                        <button type="button" id="btnCancelarEdicaoCliente" class="button button-secundario"
+                            hidden>Cancelar</button>
+                        <button id="btnSubmitCliente" name="btnSubmitCliente" type="submit"
+                            class="button">ENVIAR</button>
+                    </div>
+                </form>
             </div>
         </div>
-    </header>
 
-    <!-- Container Principal do SPA -->
-    <main id="app">
+        <div id="modal-containerNota" class="modal-overlay" style="display: none">
+            <div class="modal-card-nota">
 
-        <!-- PÁGINA 1: OFERTAS (CARROSSEL) -->
-        <section id="ofertas" class="page active">
-            <div class="titulo-pagina">
-                <h2>Ofertas em Destaque</h2>
+                <button id="btn-fechar-modal-nota" class="close-button">
+                    &times;
+                </button>
+
+                <h2>Registrar <span>Nota Fiscal</span></h2>
+
+                <!-- Feedback específico da nota -->
+                <div id="feedbackNota" class="feedback"></div>
+
+                <form id="formNota">
+
+                    <input type="hidden" id="idCliente" name="idCliente">
+
+                    <div class="grid">
+                        <label for="clienteNota">Cliente*</label>
+                        <div class="autocomplete">
+                            <input type="text" id="clienteNota" name="cliente" autocomplete="off"
+                                placeholder="Digite o nome do cliente">
+                            <div id="listaClientes" class="autocomplete-list"></div>
+                        </div>
+                    </div>
+
+                    <div class="grid" id="campoEntregadorNota" hidden>
+                        <label for="entregadorNota">Registrar em nome de (entregador)</label>
+                        <div class="autocomplete">
+                            <input type="text" id="entregadorNota" name="entregadorSelecionado" autocomplete="off"
+                                placeholder="Deixe em branco para registrar no seu próprio nome">
+                            <input type="hidden" id="entregadorSelecionadoId" name="entregadorSelecionadoId">
+                            <div id="listaEntregadoresNota" class="autocomplete-list"></div>
+                        </div>
+                    </div>
+
+                    <div class="grid grid-two">
+                        <div>
+                            <label for="email">E-mail</label>
+                            <input type="email" id="email" name="email" placeholder="Preenchido automaticamente">
+                        </div>
+                        <div>
+                            <label for="numeroNota">Nº da Nota</label>
+                            <input type="number" id="numeroNota" name="numeroNota" readonly>
+                        </div>
+                    </div>
+
+                    <div class="grid grid-two">
+                        <div>
+                            <label for="dataEmissao">Data de Emissão</label>
+                            <input type="date" id="dataEmissao" name="dataEmissao">
+                        </div>
+                        <div>
+                            <label for="valor">Valor*</label>
+                            <input type="number" id="valor" name="valor" step="0.01" placeholder="0,00" required>
+                        </div>
+                    </div>
+
+                    <div class="grid">
+                        <label for="img">Foto da Nota Fiscal</label>
+                        <input type="file" id="img" name="img" accept="image/*" capture="environment">
+                    </div>
+
+                    <input type="hidden" id="notaJaPaga" name="pago" value="false">
+                    <button type="button" id="btnNotaJaPaga" class="btn-toggle-pagamento" aria-pressed="false">
+                        💰 Registrar como já paga
+                    </button>
+
+                    <button id="btnSubmitNota" type="submit" class="button">Registrar Nota</button>
+
+                </form>
+
             </div>
+        </div>
 
-            <!-- Carrossel Padrão -->
-            <div id="banner-carrossel" class="carrossel hidden">
-                <div class="slides-container">
-                    <!-- Preenchido dinamicamente via JS assim que os produtos com maior desconto carregarem -->
+        <div id="modal-imagem-nota" class="modal-overlay" style="display: none">
+            <div class="modal-imagem-conteudo">
+                <button id="btn-fechar-modal-imagem" class="close-button">&times;</button>
+                <img id="imagemNotaAmpliada" src="" alt="Foto da nota ampliada">
+                <div class="modal-imagem-acoes">
+                    <button type="button" id="btnPagoModalImagem" class="button">Marcar como Pago</button>
+                    <button type="button" id="btnBaixarModalImagem" class="button button-secundario">⬇️ Baixar</button>
+                    <button type="button" id="btnExcluirModalImagem" class="button button-secundario">🗑️
+                        Excluir</button>
                 </div>
-                <button class="botao-ant" onclick="mudarSlide(-1)">&#10094;</button>
-                <button class="botao-prox" onclick="mudarSlide(1)">&#10095;</button>
-                <div class="carrossel-dots">
-                    <span class="dot ativo" onclick="irParaSlide(0)"></span>
-                    <span class="dot" onclick="irParaSlide(1)"></span>
-                    <span class="dot" onclick="irParaSlide(2)"></span>
+            </div>
+        </div>
+
+        <div id="modal-planejar-rotas" class="modal-overlay" style="display: none">
+            <div class="modal-card modal-card-rotas">
+                <button id="btn-fechar-modal-rotas" class="close-button">&times;</button>
+                <h2>Planejar <span>Rotas</span></h2>
+
+                <div id="feedbackRotas" class="feedback"></div>
+
+                <div class="grid">
+                    <label>Data da rota
+                        <input type="date" id="dataPlanejamentoRotas">
+                    </label>
+                </div>
+
+                <div id="blocosEntregadoresRotas" class="blocos-entregadores-rotas"></div>
+
+                <button type="button" id="btnAdicionarEntregadorRota" class="button-secundario" style="width: 100%;">+
+                    Adicionar Entregador</button>
+
+                <button type="button" id="btnSalvarRotas" class="button" style="margin-top: 18px;">Salvar
+                    Pré-Tabela</button>
+            </div>
+        </div>
+
+        <section id="inicial">
+            <div class="inicial-menu" id="inicial-menu">
+                <h1>Bem-vindo 👋</h1>
+                <div class="info-boxes">
+                    <div class="info-box">
+                        <span>📅 Data de hoje</span>
+                        <strong id="dataAtual">--</strong>
+                    </div>
+                    <div class="info-box">
+                        <span>🕒 Horário atual</span>
+                        <strong id="horaAtual">--:--:--</strong>
+                    </div>
                 </div>
             </div>
-
-            <!-- Caixa de Pesquisa -->
-            <div class="pesquisa-container">
-                <input type="text" id="search-input-ofertas"
-                    placeholder="O que você está procurando? (Ex: Arroz, Feijão...)">
-                <button class="btn-pesquisar">Buscar</button>
-            </div>
-
-            <div class="titulo-secao">
-                <h3>Produtos em Promoção</h3>
-            </div>
-
-            <!-- Produtos em Promoção: scroll horizontal -->
-            <div class="scroll-wrapper">
-                <button type="button" class="scroll-seta esq" aria-label="Rolar para a esquerda">&#10094;</button>
-                <div class="scroll-horizontal" id="grid-promocoes">
-                    <div class="skeleton-card"></div>
-                    <div class="skeleton-card"></div>
-                    <div class="skeleton-card"></div>
-                </div>
-                <button type="button" class="scroll-seta dir" aria-label="Rolar para a direita">&#10095;</button>
-            </div>
-
-            <!-- Departamentos (na ordem definida na gestão), abaixo das promoções -->
-            <div class="grid-produtos" id="grid-todos-ofertas">
-                <div class="skeleton-card"></div>
-                <div class="skeleton-card"></div>
-                <div class="skeleton-card"></div>
-                <div class="skeleton-card"></div>
-            </div>
+            <div id="inicialConteudo"></div>
         </section>
 
-        <!-- PÁGINA 2: PRODUTOS (PESQUISA + GRID) -->
-        <section id="produtos" class="page">
-            <div class="titulo-pagina">
-                <h2>Nossos Produtos</h2>
-            </div>
-
-            <!-- Caixa de Pesquisa -->
-            <div class="pesquisa-container pesquisa-com-filtro">
-                <input type="text" id="search-input-produtos"
-                    placeholder="O que você está procurando? (Ex: Arroz, Feijão...)">
-                <select id="filtro-departamento" aria-label="Filtrar por departamento">
-                    <option value="">Todos os departamentos</option>
-                </select>
-                <button class="btn-pesquisar">Buscar</button>
-            </div>
-
-            <!-- Grid de Produtos -->
-            <div class="grid-produtos" id="grid-produtos">
-                <div class="skeleton-card"></div>
-                <div class="skeleton-card"></div>
-                <div class="skeleton-card"></div>
-                <div class="skeleton-card"></div>
-            </div>
+        <section id="clientes" hidden>
+            <div id="clientesConteudo"></div>
         </section>
 
+        <section id="notas" hidden>
+            <div id="notasToolbar"></div>
+            <div id="notasConteudo"></div>
+        </section>
+
+        <section id="faturamento" hidden>
+            <div id="faturamentoToolbar"></div>
+            <div id="faturamentoConteudo"></div>
+        </section>
+
+        <section id="lixeira" hidden>
+            <div id="lixeiraToolbar"></div>
+            <div id="lixeiraConteudo"></div>
+        </section>
     </main>
 
-    <!-- Rodapé -->
-    <footer class="rodape">
-        <div class="rodape-localizacao" id="localizacao">
-            <div class="rodape-endereco">
-                <h3>Onde estamos</h3>
-                <p><i class="fas fa-location-dot"></i> Av. Dr. Pedro Lessa, 1054<br>Santos - SP</p>
-                <a class="btn-como-chegar"
-                    href="https://www.google.com/maps/search/?api=1&query=Av.+Dr.+Pedro+Lessa+1054+Santos+SP"
-                    target="_blank" rel="noopener">
-                    <i class="fas fa-route"></i> Como chegar
-                </a>
-            </div>
-            <div class="rodape-mapa">
-                <iframe title="Localização da SOS Alimentos no Google Maps"
-                    src="https://www.google.com/maps/embed?pb=!1m18!1m12!1m3!1d3645.5864557953714!2d-46.3053846253093!3d-23.97505947851772!2m3!1f0!2f0!3f0!3m2!1i1024!2i768!4f13.1!3m3!1m2!1s0x94ce03b1cf01934b%3A0x7e34b5da15627d01!2sS.O.S.%20Alimentos!5e0!3m2!1sen!2sus!4v1791168836962!5m2!1sen!2sus"
-                    width="100%" height="260" style="border:0;" allowfullscreen loading="lazy"
-                    referrerpolicy="no-referrer-when-downgrade"></iframe>
-            </div>
-        </div>
-        <div class="rodape-conteudo">
-            <div class="rodape-marca">
-                <h3>SOS ALIMENTOS</h3>
-                <p>Os melhores preços em alimentos, direto para sua casa.</p>
-            </div>
-            <div class="rodape-links">
-                <a href="#ofertas">Ofertas da semana</a>
-                <a href="#produtos">Produtos</a>
-                <a href="gestao.html">Gestão</a>
-            </div>
-            <div class="rodape-contato">
-                <a href="#">WhatsApp</a>
-                <a href="#">Instagram</a>
-            </div>
-        </div>
-        <p class="rodape-copy">&copy; <span id="ano-atual"></span> SOS Alimentos. Todos os direitos reservados.</p>
-    </footer>
 
-    <!-- Botão flutuante do WhatsApp -->
-    <a class="whatsapp-flutuante"
-        href="https://wa.me/5513988824697?text=Ol%C3%A1%21%20Vim%20pelo%20site%20da%20SOS%20Alimentos%20e%20gostaria%20de%20fazer%20um%20pedido."
-        target="_blank" rel="noopener" aria-label="Fale conosco pelo WhatsApp">
-        <i class="fab fa-whatsapp"></i>
-        <span class="whatsapp-flutuante-texto">Fale conosco</span>
-    </a>
 
-    <script src="script.js"></script>
-
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+    <script>document.write('<script src="script.js?v=' + Date.now() + '"><' + '/script>');</script>
+    <script>
+        // Evento de Logout
+        document.getElementById("btnSair").addEventListener("click", async (event) => {
+            event.preventDefault();
+            try {
+                await fetch("https://sos-alimentos-servidor.onrender.com/api/auth/logout", {
+                    method: "POST",
+                    credentials: "include",
+                });
+            } catch (erro) {
+                console.error("Erro ao fazer logout na API:", erro);
+            } finally {
+                sessionStorage.clear();
+                window.location.href = "./pages/login/login.html";
+            }
+        });
+    </script>
 </body>
 
 </html>
